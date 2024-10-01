@@ -1,12 +1,13 @@
-import os, cv2
+import os, cv2, fnmatch, tqdm
 
 from utils.video_utils import frame_from_video
+from utils.general_utils import try_wrapper
 
-input_path = "../../data/data/0012b1de-a058-43f3-9788-f662afc43070-original.mp4"
-# input_path = "../../data/data/00368efb-8457-4425-9789-3a1ae302b1ae-original.mp4"
 
+input_folder = "../../data/data/"
 output_folder = "../../data/resized_data/"
 os.makedirs(output_folder, exist_ok=True)
+log_path = os.path.join(output_folder, "error_log.txt")
 
 OUTPUT_SIZE=768
 OUTPUT_FPS=24
@@ -19,11 +20,11 @@ def process_video(input_path):
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frames_per_second = video.get(cv2.CAP_PROP_FPS)
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    print("basename", basename)
-    print("width", width)
-    print("height", height)
-    print("frames_per_second", frames_per_second)
-    print("num_frames", num_frames)
+    # print("basename", basename)
+    # print("width", width)
+    # print("height", height)
+    # print("frames_per_second", frames_per_second)
+    # print("num_frames", num_frames)
 
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename),
@@ -70,12 +71,20 @@ def process_video(input_path):
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frames_per_second = video.get(cv2.CAP_PROP_FPS)
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    print("basename", basename)
-    print("width", width)
-    print("height", height)
-    print("frames_per_second", frames_per_second)
-    print("num_frames", num_frames)
+    # print("basename", basename)
+    # print("width", width)
+    # print("height", height)
+    # print("frames_per_second", frames_per_second)
+    # print("num_frames", num_frames)
 
-process_video(input_path)
+output_files = set(os.listdir(output_folder))
+
+for filename in tqdm.tqdm(os.listdir(input_folder)):
+    if fnmatch.fnmatch(filename, '*-original.mp4'):
+        if filename in output_files:
+            continue
+
+        input_path = os.path.join(input_folder, filename)
+        try_wrapper(lambda: process_video(input_path), filename, log_path)
 
 # python dataset_preprocessing/video_sampling_resizing.py
