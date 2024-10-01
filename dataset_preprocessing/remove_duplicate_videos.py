@@ -1,14 +1,27 @@
 import sys
 sys.path.append(".")
 
+import os, tqdm
 from utils.video_utils import hash_file
+from utils.general_utils import try_wrapper
 
-# print("file1", hash_file("../../data/resized_data/6c6aa0b1-b3b3-4768-b87b-a020743213fc-original.mp4"))
-# print("file2", hash_file("../../data/resized_data/75ec5951-d644-48aa-87c2-87cfb61aa7c6-original.mp4"))
-# print("same", hash_file("../../data/resized_data/6c6aa0b1-b3b3-4768-b87b-a020743213fc-original.mp4") == hash_file("../../data/resized_data/75ec5951-d644-48aa-87c2-87cfb61aa7c6-original.mp4"))
 
-print("file1", hash_file("../../data/resized_data/df5afa6a-b7a2-485e-ae12-e3d045e4ebc0-original.mp4"))
-print("file2", hash_file("../../data/resized_data/00368efb-8457-4425-9789-3a1ae302b1ae-original.mp4"))
-print("same", hash_file("../../data/resized_data/df5afa6a-b7a2-485e-ae12-e3d045e4ebc0-original.mp4") == hash_file("../../data/resized_data/00368efb-8457-4425-9789-3a1ae302b1ae-original.mp4"))
+input_folder = "../../data/resized_data/"
+log_path = os.path.join(input_folder, "error_log_remove_duplicate.txt")
+
+hashset = set()
+
+def process_video(input_path):
+    hash = hash_file(input_path)
+    if hash in hashset:
+        print(f"File deleted: {input_path}")
+        os.remove(input_path)
+    else:
+        hashset.add(hash)
+
+for filename in tqdm.tqdm(os.listdir(input_folder)):
+    input_path = os.path.join(input_folder, filename)
+    
+    try_wrapper(lambda: process_video(input_path), filename, log_path)
 
 # python dataset_preprocessing/remove_duplicate_videos.py
