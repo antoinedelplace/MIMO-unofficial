@@ -1,6 +1,6 @@
 import os, cv2, fnmatch, tqdm
 
-from utils.video_utils import frame_from_video
+from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper
 
 
@@ -34,7 +34,7 @@ def process_video(input_path):
         isColor=True,
     )
 
-    frame_gen = frame_from_video(video)
+    frame_gen = frame_gen_from_video(video)
     
     time_per_frame_original = 1 / frames_per_second
     time_per_frame_target = 1 / OUTPUT_FPS
