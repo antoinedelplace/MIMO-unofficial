@@ -10,8 +10,6 @@ from detectron2.structures import Instances
 from numpy import ndarray
 from torch.utils.data import DataLoader, Dataset
 
-from utils.video_utils import frame_gen_from_video
-
 
 class Prediction(NamedTuple):
     x: float
@@ -23,20 +21,14 @@ class Prediction(NamedTuple):
 
 
 class VideoDataset(Dataset):
-    def __init__(self, input_video_path: str):
-        self.video = cv2.VideoCapture(input_video_path)
-        self.frame_gen = list(frame_gen_from_video(self.video))
+    def __init__(self, frame_gen):
+        self.frames = list(frame_gen)
 
     def __getitem__(self, index) -> ndarray:
-        return self.frame_gen[index]
+        return self.frames[index]
 
     def __len__(self):
-        return len(self.frame_gen)
-    
-    def __del__(self):
-        # Release video when the dataset object is deleted
-        if self.video.isOpened():
-            self.video.release()
+        return len(self.frames)
 
 
 class BatchPredictor:
