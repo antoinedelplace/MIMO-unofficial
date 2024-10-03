@@ -70,17 +70,19 @@ def visualize(predictions, video, input_path):
 
     output_file.release()
 
-    video = cv2.VideoCapture(os.path.join(output_folder, basename))
+    video2 = cv2.VideoCapture(os.path.join(output_folder, basename))
 
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frames_per_second = video.get(cv2.CAP_PROP_FPS)
-    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frames_per_second = video2.get(cv2.CAP_PROP_FPS)
+    num_frames = int(video2.get(cv2.CAP_PROP_FRAME_COUNT))
     print("basename", basename)
     print("width", width)
     print("height", height)
     print("frames_per_second", frames_per_second)
     print("num_frames", num_frames) 
+
+    video2.release()
 
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
