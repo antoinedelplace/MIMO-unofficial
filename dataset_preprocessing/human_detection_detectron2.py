@@ -10,10 +10,11 @@ from detectron2.data import MetadataCatalog
 import os, cv2, torch, tqdm
 
 from utils.video_utils import frame_gen_from_video
-from utils.general_utils import time_it
 from utils.detectron2_utils import BatchPredictor
+from utils.general_utils import try_wrapper
 
-input_path = "../../data/resized_data/df5afa6a-b7a2-485e-ae12-e3d045e4ebc0-original.mp4"
+
+input_folder = "../../data/resized_data/"
 output_folder = "../../data/detectron2_data/"
 os.makedirs(output_folder, exist_ok=True)
 log_path = os.path.join(output_folder, "error_log.txt")
@@ -26,7 +27,12 @@ def get_cfg_settings():
 
     return cfg
 
-def visualize(predictions, video, cfg):
+cfg = get_cfg_settings()
+batch_size = 24
+workers = 8
+predictor = BatchPredictor(cfg, batch_size, workers)
+
+def visualize(predictions, video, input_path):
     video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning
 
     basename = os.path.basename(input_path)
@@ -74,26 +80,32 @@ def visualize(predictions, video, cfg):
     print("width", width)
     print("height", height)
     print("frames_per_second", frames_per_second)
-    print("num_frames", num_frames)
+    print("num_frames", num_frames) 
 
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
-
-    cfg = get_cfg_settings()
-    batch_size = 24
-    workers = 8
-    predictor = BatchPredictor(cfg, batch_size, workers)
     
     frame_gen = frame_gen_from_video(video)
 
     outputs = list(predictor(frame_gen))
 
-    print(outputs)
-    visualize(outputs, video, cfg)
+    basename = os.path.basename(input_path)
+    output_path = os.path.join(output_folder, basename).replace(".mp4", ".pth")
+
+    # visualize(outputs, video, input_path)
+    torch.save(outputs.to("cpu"), output_path)
 
     video.release()
 
-run_on_video(input_path)
+
+output_files = set(os.listdir(output_folder))
+
+for filename in tqdm.tqdm(os.listdir(input_folder)):
+    if filename in output_files:
+        continue
+
+    input_path = os.path.join(input_folder, filename)
+    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
 
 
 # python dataset_preprocessing/human_detection_detectron2.py
