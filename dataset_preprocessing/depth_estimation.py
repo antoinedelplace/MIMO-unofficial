@@ -60,6 +60,7 @@ def run_on_video(input_path):
         mini = output_batch.min()
         depth = (output_batch - mini) / (output_batch.max() - mini) * 255.0
         depth = depth.astype(np.uint8)
+        depth = np.repeat(depth[..., np.newaxis], 3, axis=-1)
 
         for frame in depth:
             output_file.write(frame)
