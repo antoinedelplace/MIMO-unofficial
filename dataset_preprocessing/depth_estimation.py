@@ -43,11 +43,11 @@ def run_on_video(input_path):
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frames_per_second = video.get(cv2.CAP_PROP_FPS)
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    print("basename", basename)
-    print("width", width)
-    print("height", height)
-    print("frames_per_second", frames_per_second)
-    print("num_frames", num_frames)
+    # print("basename", basename)
+    # print("width", width)
+    # print("height", height)
+    # print("frames_per_second", frames_per_second)
+    # print("num_frames", num_frames)
 
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename),
