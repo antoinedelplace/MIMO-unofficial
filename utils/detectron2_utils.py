@@ -1,14 +1,14 @@
 from typing import Iterable, List, NamedTuple
 
-import cv2
 import detectron2.data.transforms as T
 import torch
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import CfgNode
 from detectron2.modeling import build_model
 from detectron2.structures import Instances
-from numpy import ndarray
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
+
+from utils.torch_utils import VideoDataset
 
 
 class Prediction(NamedTuple):
@@ -18,17 +18,6 @@ class Prediction(NamedTuple):
     height: float
     score: float
     class_name: str
-
-
-class VideoDataset(Dataset):
-    def __init__(self, frame_gen):
-        self.frames = list(frame_gen)
-
-    def __getitem__(self, index) -> ndarray:
-        return self.frames[index]
-
-    def __len__(self):
-        return len(self.frames)
 
 
 class BatchPredictor:
@@ -65,8 +54,8 @@ class BatchPredictor:
             data.append({"image": image, "height": height, "width": width})
         return data
 
-    def __call__(self, input_video_path) -> Iterable[List[Prediction]]:
-        dataset = VideoDataset(input_video_path)
+    def __call__(self, frame_gen) -> Iterable[List[Prediction]]:
+        dataset = VideoDataset(frame_gen)
         loader = DataLoader(
             dataset,
             self.batch_size,

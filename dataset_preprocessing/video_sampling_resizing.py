@@ -65,12 +65,12 @@ def process_video(input_path):
     video.release()
     output_file.release()
 
-    video = cv2.VideoCapture(os.path.join(output_folder, basename))
+    # video = cv2.VideoCapture(os.path.join(output_folder, basename))
 
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frames_per_second = video.get(cv2.CAP_PROP_FPS)
-    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    # width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # frames_per_second = video.get(cv2.CAP_PROP_FPS)
+    # num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     # print("basename", basename)
     # print("width", width)
     # print("height", height)

@@ -3,11 +3,12 @@ sys.path.append(".")
 sys.path.append("../Depth-Anything-V2")
 
 import os, cv2, torch, tqdm
-
-from depth_anything_v2.dpt import DepthAnythingV2
+import numpy as np
+import matplotlib
 
 from utils.video_utils import frame_gen_from_video
 from utils.general_utils import time_it
+from utils.depth_anything_v2_utils import BatchPredictor
 
 input_path = "../../data/resized_data/df5afa6a-b7a2-485e-ae12-e3d045e4ebc0-original.mp4"
 output_folder = "../../data/detectron2_data/"
@@ -24,8 +25,10 @@ model_configs = {
     'vitg': {'encoder': 'vitg', 'features': 384, 'out_channels': [1536, 1536, 1536, 1536]}
 }
 
-def visualize(predictions, video, cfg):
-    video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning
+cmap = matplotlib.colormaps.get_cmap('Spectral_r')
+
+def run_on_video(input_path):
+    video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -46,20 +49,24 @@ def visualize(predictions, video, cfg):
         isColor=True,
     )
 
-    metadata = metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
-    video_visualizer = VideoVisualizer(metadata, ColorMode.IMAGE)
+    batch_size = 12
+    workers = 8
 
+    depth_anything = BatchPredictor(batch_size, workers, width, height, **model_configs[encoder])
+    depth_anything.load_state_dict(torch.load(f'../../checkpoints/depth_anything_v2_{encoder}.pth', map_location='cpu'))
+    depth_anything = depth_anything.to(DEVICE).eval()
+    
     frame_gen = frame_gen_from_video(video)
 
-    for frame, pred in tqdm.tqdm(zip(frame_gen, predictions)):
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pred_cpu = pred.to(torch.device("cpu"))
-        vis_frame = video_visualizer.draw_instance_predictions(frame, pred_cpu)
+    for output_batch in depth_anything.infer_video(frame_gen):
+        mini = output_batch.min()
+        depth = (output_batch - mini) / (output_batch.max() - mini) * 255.0
+        depth = depth.astype(np.uint8)
+        depth = (cmap(depth)[:, :, :3] * 255)[:, :, ::-1].astype(np.uint8)
 
-        # Converts Matplotlib RGB format to OpenCV BGR format
-        vis_frame = cv2.cvtColor(vis_frame.get_image(), cv2.COLOR_RGB2BGR)
-        output_file.write(vis_frame)
+        output_file.write(depth)
 
+    video.release()
     output_file.release()
 
     video = cv2.VideoCapture(os.path.join(output_folder, basename))
@@ -73,37 +80,6 @@ def visualize(predictions, video, cfg):
     print("height", height)
     print("frames_per_second", frames_per_second)
     print("num_frames", num_frames)
-
-def run_on_video(input_path):
-    depth_anything = DepthAnythingV2(**model_configs[encoder])
-    depth_anything.load_state_dict(torch.load(f'../../checkpoints/depth_anything_v2_{encoder}.pth', map_location='cpu'))
-    depth_anything = depth_anything.to(DEVICE).eval()
-
-    video = cv2.VideoCapture(input_path)
-
-    basename = os.path.basename(input_path)
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frames_per_second = video.get(cv2.CAP_PROP_FPS)
-    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    # print("basename", basename)
-    # print("width", width)
-    # print("height", height)
-    # print("frames_per_second", frames_per_second)
-    # print("num_frames", num_frames)
-    
-    frame_gen = frame_gen_from_video(video)
-
-    def get_predictions():
-        for frame in frame_gen:
-            yield depth_anything.infer_image(frame, width)
-
-    outputs = list(get_predictions())
-
-    print(outputs)
-    #visualize(outputs, video, cfg)
-
-    video.release()
 
 run_on_video(input_path)
 
