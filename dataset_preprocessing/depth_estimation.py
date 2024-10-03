@@ -4,7 +4,6 @@ sys.path.append("../Depth-Anything-V2")
 
 import os, cv2, torch, tqdm
 import numpy as np
-import matplotlib
 
 from utils.video_utils import frame_gen_from_video
 from utils.depth_anything_v2_utils import BatchPredictor
@@ -32,8 +31,6 @@ input_size = 768
 depth_anything = BatchPredictor(batch_size, workers, input_size, input_size, **model_configs[encoder])
 depth_anything.load_state_dict(torch.load(f'../../checkpoints/depth_anything_v2_{encoder}.pth', map_location='cpu'))
 depth_anything = depth_anything.to(DEVICE).eval()
-
-cmap = matplotlib.colormaps.get_cmap('Spectral_r')
 
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
@@ -63,7 +60,6 @@ def run_on_video(input_path):
         mini = output_batch.min()
         depth = (output_batch - mini) / (output_batch.max() - mini) * 255.0
         depth = depth.astype(np.uint8)
-        depth = (cmap(depth)[:, :, :, :3] * 255)[:, :, :, ::-1].astype(np.uint8)
 
         for frame in depth:
             output_file.write(frame)
