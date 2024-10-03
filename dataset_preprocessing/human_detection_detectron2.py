@@ -28,8 +28,8 @@ def get_cfg_settings():
     return cfg
 
 cfg = get_cfg_settings()
-batch_size = 24
-workers = 8
+batch_size = 64 #24
+workers = 16 #8
 predictor = BatchPredictor(cfg, batch_size, workers)
 
 def visualize(predictions, video, input_path):
@@ -93,10 +93,9 @@ def run_on_video(input_path):
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".pth")
 
     # visualize(outputs, video, input_path)
-    torch.save(outputs.to("cpu"), output_path)
+    torch.save(outputs, output_path)
 
     video.release()
-
 
 output_files = set(os.listdir(output_folder))
 
