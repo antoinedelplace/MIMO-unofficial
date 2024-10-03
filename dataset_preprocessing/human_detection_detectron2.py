@@ -28,7 +28,7 @@ def get_cfg_settings():
     return cfg
 
 cfg = get_cfg_settings()
-batch_size = 64 #24
+batch_size = 52 #24
 workers = 16 #8
 predictor = BatchPredictor(cfg, batch_size, workers)
 
@@ -97,7 +97,7 @@ def run_on_video(input_path):
 
     video.release()
 
-output_files = set(os.listdir(output_folder))
+output_files = sorted(os.listdir(output_folder))
 
 for filename in tqdm.tqdm(os.listdir(input_folder)):
     if filename in output_files:

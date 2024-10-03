@@ -77,7 +77,7 @@ def process_video(input_path):
     # print("frames_per_second", frames_per_second)
     # print("num_frames", num_frames)
 
-output_files = set(os.listdir(output_folder))
+output_files = sorted(os.listdir(output_folder))
 
 for filename in tqdm.tqdm(os.listdir(input_folder)):
     if fnmatch.fnmatch(filename, '*-original.mp4'):
