@@ -7,3 +7,6 @@ git+https://github.com/facebookresearch/detectron2.git
 opencv-python
 
 xformers
+
+# for efficient video reading and processing (used by sam2)
+decord

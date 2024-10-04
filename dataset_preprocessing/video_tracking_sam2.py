@@ -1,10 +1,11 @@
 import sys
 sys.path.append(".")
+sys.path.append("../sam2")
 
-import os, cv2, tqdm
+import os, cv2, torch, tqdm
 import numpy as np
 
-# from sam2.sam2_video_predictor import SAM2VideoPredictor
+from sam2.build_sam import build_sam2_video_predictor
 
 from utils.video_utils import frame_gen_from_video
 
@@ -22,7 +23,9 @@ log_path = os.path.join(human_output_folder, "error_log.txt")
 batch_size = 24
 workers = 8
 score_threshold = 0.7
-# predictor = SAM2VideoPredictor.from_pretrained("facebook/sam2-hiera-large")
+checkpoint = "../../checkpoints/sam2.1_hiera_large.pt"
+model_cfg = "../sam2/configs/sam2.1/sam2.1_hiera_l.yaml"
+predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
 def get_index_first_frame_with_character(detectron2_data):
     zero = np.where((detectron2_data["data_pred_classes"] == 0) & (detectron2_data["data_scores"] > score_threshold))
@@ -33,8 +36,8 @@ def get_global_index_biggest_human_in_frame(detectron2_data, i_frame):
                                              & (detectron2_data["data_frame_index"] == i_frame) 
                                              & (detectron2_data["data_scores"] > score_threshold))
 
-    i_global = np.argmax(detectron2_data["data_pred_masks"][indexes_humans_at_input_frame].sum(axis=(1, 2)))
-    return i_global
+    i_sub = np.argmax(detectron2_data["data_pred_masks"][indexes_humans_at_input_frame].sum(axis=(1, 2)))
+    return indexes_humans_at_input_frame[0][i_sub]
 
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
@@ -49,14 +52,19 @@ def run_on_video(input_path):
     i_biggest_human = get_global_index_biggest_human_in_frame(detectron2_data, i_first_frame)
     print("i_biggest_human", i_biggest_human)
 
-    # with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-    #     state = predictor.init_state(input_path)
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        state = predictor.init_state(input_path)
 
-    #     # add new prompts and instantly get the output on the same frame
-    #     frame_idx, object_ids, masks = predictor.add_new_points_or_box(state, <your_prompts>):
+        # add new prompts and instantly get the output on the same frame
+        predictor.add_new_points_or_box(inference_state=state, 
+                                        frame_idx=detectron2_data["data_frame_index"][i_biggest_human],
+                                        obj_id=0,
+                                        box=detectron2_data["data_pred_boxes"][i_biggest_human])
 
-    #     # propagate the prompts to get masklets throughout the video
-    #     for frame_idx, object_ids, masks in predictor.propagate_in_video(state):
+        # propagate the prompts to get masklets throughout the video
+        outputs = predictor.propagate_in_video(state)
+
+        print(outputs)
 
     
     # frame_gen = frame_gen_from_video(video)
