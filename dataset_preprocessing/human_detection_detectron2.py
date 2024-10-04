@@ -8,6 +8,7 @@ from detectron2.utils.visualizer import ColorMode
 from detectron2.data import MetadataCatalog
 
 import os, cv2, torch, tqdm
+import numpy as np
 
 from utils.video_utils import frame_gen_from_video
 from utils.detectron2_utils import BatchPredictor
@@ -28,7 +29,7 @@ def get_cfg_settings():
     return cfg
 
 cfg = get_cfg_settings()
-batch_size = 52 #24
+batch_size = 32 #24
 workers = 16 #8
 predictor = BatchPredictor(cfg, batch_size, workers)
 
@@ -84,6 +85,33 @@ def visualize(predictions, video, input_path):
 
     video2.release()
 
+def save(outputs, output_path):
+    data_frame_index = []
+    data_pred_boxes = []
+    data_scores = []
+    data_pred_classes = []
+    data_pred_masks = []
+
+    for i in range(len(outputs)):
+        data_scores.append(outputs[i].scores.cpu().numpy())
+        data_frame_index.append([i]*len(data_scores[-1]))
+        data_pred_boxes.append(outputs[i].pred_boxes.tensor.cpu().numpy())
+        data_pred_classes.append(outputs[i].pred_classes.cpu().numpy())
+        data_pred_masks.append(outputs[i].pred_masks.cpu().numpy())
+
+    data_frame_index = np.concatenate(data_frame_index)
+    data_pred_boxes = np.concatenate(data_pred_boxes)
+    data_scores = np.concatenate(data_scores)
+    data_pred_classes = np.concatenate(data_pred_classes)
+    data_pred_masks = np.concatenate(data_pred_masks)
+
+    np.savez_compressed(output_path, 
+                        data_frame_index=data_frame_index, 
+                        data_pred_boxes=data_pred_boxes,
+                        data_scores=data_scores,
+                        data_pred_classes=data_pred_classes,
+                        data_pred_masks=data_pred_masks)
+
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
     
@@ -92,10 +120,10 @@ def run_on_video(input_path):
     outputs = list(predictor(frame_gen))
 
     basename = os.path.basename(input_path)
-    output_path = os.path.join(output_folder, basename).replace(".mp4", ".pth")
+    output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
 
     # visualize(outputs, video, input_path)
-    torch.save(outputs, output_path)
+    save(outputs, output_path)
 
     video.release()
 
