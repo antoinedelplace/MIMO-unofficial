@@ -127,9 +127,10 @@ def run_on_video(input_path):
 
     video.release()
 
-output_files = sorted(os.listdir(output_folder))
+input_files = sorted(os.listdir(input_folder))
+output_files = os.listdir(output_folder)
 
-for filename in tqdm.tqdm(os.listdir(input_folder)):
+for filename in tqdm.tqdm(input_files):
     if filename in output_files:
         continue
 

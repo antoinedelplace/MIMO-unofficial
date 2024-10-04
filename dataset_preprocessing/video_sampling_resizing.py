@@ -79,9 +79,10 @@ def process_video(input_path):
 
     # video2.release()
 
-output_files = sorted(os.listdir(output_folder))
+input_files = sorted(os.listdir(input_folder))
+output_files = os.listdir(output_folder)
 
-for filename in tqdm.tqdm(os.listdir(input_folder)):
+for filename in tqdm.tqdm(input_files):
     if fnmatch.fnmatch(filename, '*-original.mp4'):
         if filename in output_files:
             continue

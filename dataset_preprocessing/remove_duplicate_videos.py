@@ -19,7 +19,9 @@ def process_video(input_path):
     else:
         hashset.add(hash)
 
-for filename in tqdm.tqdm(sorted(os.listdir(input_folder))):
+input_files = sorted(os.listdir(input_folder))
+
+for filename in tqdm.tqdm(input_files):
     input_path = os.path.join(input_folder, filename)
     
     try_wrapper(lambda: process_video(input_path), filename, log_path)
