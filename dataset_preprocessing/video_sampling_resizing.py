@@ -80,12 +80,12 @@ def process_video(input_path):
     # video2.release()
 
 input_files = sorted(os.listdir(input_folder))
-output_files = [os.path.basename(file) for file in os.listdir(output_folder)]
+output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
 
 for filename in tqdm.tqdm(input_files):
     if fnmatch.fnmatch(filename, '*-original.mp4'):
-        basename = os.path.basename(filename)
-        if basename in output_files:
+        basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+        if basename_wo_ext in output_files:
             continue
 
         input_path = os.path.join(input_folder, filename)
