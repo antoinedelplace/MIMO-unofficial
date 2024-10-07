@@ -83,10 +83,11 @@ def run_on_video(input_path):
     # video2.release()
 
 input_files = sorted(os.listdir(input_folder))
-output_files = os.listdir(output_folder)
+output_files = [os.path.basename(file) for file in os.listdir(output_folder)]
 
 for filename in tqdm.tqdm(input_files):
-    if filename in output_files:
+    basename = os.path.basename(filename)
+    if basename in output_files:
         continue
 
     input_path = os.path.join(input_folder, filename)
