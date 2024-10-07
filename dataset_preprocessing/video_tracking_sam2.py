@@ -1,9 +1,15 @@
 import sys
 sys.path.append(".")
 sys.path.append("../sam2")
+sys.path.append("../detectron2")
 
 import os, cv2, torch, tqdm
 import numpy as np
+
+from detectron2.utils.video_visualizer import VideoVisualizer
+from detectron2.utils.visualizer import ColorMode
+from detectron2.data import MetadataCatalog
+from detectron2.structures import Instances
 
 from sam2.build_sam import build_sam2_video_predictor
 
@@ -39,6 +45,67 @@ def get_global_index_biggest_human_in_frame(detectron2_data, i_frame):
     i_sub = np.argmax(detectron2_data["data_pred_masks"][indexes_humans_at_input_frame].sum(axis=(1, 2)))
     return indexes_humans_at_input_frame[0][i_sub]
 
+def visualize(predictions, video, input_path):
+    video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning
+
+    basename = os.path.basename(input_path)
+    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frames_per_second = video.get(cv2.CAP_PROP_FPS)
+    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    print("basename", basename)
+    print("width", width)
+    print("height", height)
+    print("frames_per_second", frames_per_second)
+    print("num_frames", num_frames)
+
+    output_file = cv2.VideoWriter(
+        filename=os.path.join(human_output_folder, basename),
+        fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+        fps=float(frames_per_second),
+        frameSize=(width, height),
+        isColor=True,
+    )
+
+    metadata = metadata = MetadataCatalog.get("coco_2017_test")
+    video_visualizer = VideoVisualizer(metadata, ColorMode.IMAGE)
+
+    frame_gen = frame_gen_from_video(video)
+
+    instance_predictions = [Instances((width, height))]*num_frames
+    
+    for out_frame_idx, out_obj_ids, out_mask_logits in predictions:
+        instance_predictions[out_frame_idx] = instance_predictions[out_frame_idx].cat([Instances((width, height), 
+                                      pred_classes=torch.tensor(out_obj_ids, dtype=torch.int8), 
+                                      pred_masks=(out_mask_logits > 0)[0].to(torch.bool).cpu())])
+
+    print(instance_predictions)
+
+    for frame, pred in tqdm.tqdm(zip(frame_gen, instance_predictions)):
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pred_cpu = pred.to(torch.device("cpu"))
+        vis_frame = video_visualizer.draw_instance_predictions(frame, pred_cpu)
+
+        # Converts Matplotlib RGB format to OpenCV BGR format
+        vis_frame = cv2.cvtColor(vis_frame.get_image(), cv2.COLOR_RGB2BGR)
+        output_file.write(vis_frame)
+
+    output_file.release()
+
+    video2 = cv2.VideoCapture(os.path.join(human_output_folder, basename))
+
+    width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frames_per_second = video2.get(cv2.CAP_PROP_FPS)
+    num_frames = int(video2.get(cv2.CAP_PROP_FRAME_COUNT))
+    print("basename", basename)
+    print("width", width)
+    print("height", height)
+    print("frames_per_second", frames_per_second)
+    print("num_frames", num_frames) 
+
+    video2.release()
+
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
 
@@ -62,9 +129,10 @@ def run_on_video(input_path):
                                         box=detectron2_data["data_pred_boxes"][i_biggest_human])
 
         # propagate the prompts to get masklets throughout the video
-        outputs = predictor.propagate_in_video(state)
-
-        print(outputs)
+        outputs = list(predictor.propagate_in_video(state))
+    
+    print(outputs)
+    visualize(outputs, video, input_path)
 
     
     # frame_gen = frame_gen_from_video(video)
