@@ -14,9 +14,9 @@ from detectron2.structures import Instances
 from sam2.build_sam import build_sam2_video_predictor
 
 from utils.video_utils import frame_gen_from_video
-from utils.general_utils import iou, set_memory_limit
+from utils.general_utils import iou, set_memory_limit, try_wrapper
 
-input_path = "../../data/resized_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"
+input_folder = "../../data/resized_data/"
 depth_input_folder = "../../data/depth_data/"
 detectron2_input_folder = "../../data/detectron2_data/"
 human_output_folder = "../../data/human_data/"
@@ -186,9 +186,12 @@ def save(min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask, vid
         human_mask = np.expand_dims(human_mask, axis=-1)
         occlusion_mask = np.expand_dims(occlusion_mask, axis=-1)
 
+        occlusion_wo_human_mask = occlusion_mask & ~human_mask
+        scene_mask = ~occlusion_mask & ~human_mask
+
         output_human_file.write(frames[i_frame]*human_mask)
-        output_occlusion_file.write(frames[i_frame]*(foreground_mask-human_mask))
-        output_scene_file.write(frames[i_frame]*(1-human_mask-foreground_mask))
+        output_occlusion_file.write(frames[i_frame]*occlusion_wo_human_mask)
+        output_scene_file.write(frames[i_frame]*scene_mask)
 
     output_human_file.release()
     output_scene_file.release()
@@ -263,7 +266,17 @@ def run_on_video(input_path):
     depth_video.release()
     video.release()
 
-run_on_video(input_path)
+# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
+input_files = sorted(os.listdir(input_folder))
+output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(human_output_folder)])
+
+for filename in tqdm.tqdm(input_files):
+    basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+    if basename_wo_ext in output_files:
+        continue
+
+    input_path = os.path.join(input_folder, filename)
+    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
 
 
 # python dataset_preprocessing/video_tracking_sam2.py

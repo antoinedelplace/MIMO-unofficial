@@ -128,6 +128,7 @@ def run_on_video(input_path):
 
     video.release()
 
+# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
 input_files = sorted(os.listdir(input_folder))
 output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
 

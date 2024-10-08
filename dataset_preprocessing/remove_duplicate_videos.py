@@ -19,6 +19,7 @@ def process_video(input_path):
     else:
         hashset.add(hash)
 
+# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
 input_files = sorted(os.listdir(input_folder))
 
 for filename in tqdm.tqdm(input_files):
