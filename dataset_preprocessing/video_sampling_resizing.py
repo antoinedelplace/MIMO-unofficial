@@ -1,7 +1,7 @@
 import os, cv2, fnmatch, tqdm
 
 from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper
+from utils.general_utils import try_wrapper, set_memory_limit
 
 
 input_folder = "../../data/data/"
@@ -11,6 +11,7 @@ log_path = os.path.join(output_folder, "error_log.txt")
 
 OUTPUT_SIZE=768
 OUTPUT_FPS=24
+set_memory_limit(60)
 
 def process_video(input_path):
     video = cv2.VideoCapture(input_path)

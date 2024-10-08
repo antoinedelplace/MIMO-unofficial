@@ -1,6 +1,7 @@
 import time
 from functools import wraps
 import numpy as np
+import resource
 
 def time_it(func):
     @wraps(func)
@@ -42,3 +43,7 @@ def iou(mask1, mask2):
     
     iou = intersection / union
     return iou
+
+def set_memory_limit(max_memory_gb):
+    max_memory_bytes = max_memory_gb * 1024 * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (max_memory_bytes, max_memory_bytes))

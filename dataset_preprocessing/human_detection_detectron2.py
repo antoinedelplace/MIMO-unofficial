@@ -12,7 +12,7 @@ import numpy as np
 
 from utils.video_utils import frame_gen_from_video
 from utils.detectron2_utils import BatchPredictor
-from utils.general_utils import try_wrapper
+from utils.general_utils import try_wrapper, set_memory_limit
 
 
 input_folder = "../../data/resized_data/"
@@ -32,6 +32,7 @@ cfg = get_cfg_settings()
 batch_size = 32 #24
 workers = 16 #8
 predictor = BatchPredictor(cfg, batch_size, workers)
+set_memory_limit(60)
 
 def visualize(predictions, video, input_path):
     video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning

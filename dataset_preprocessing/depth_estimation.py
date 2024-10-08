@@ -7,7 +7,7 @@ import numpy as np
 
 from utils.video_utils import frame_gen_from_video
 from utils.depth_anything_v2_utils import BatchPredictor
-from utils.general_utils import try_wrapper
+from utils.general_utils import try_wrapper, set_memory_limit
 
 input_folder = "../../data/resized_data/"
 output_folder = "../../data/depth_data/"
@@ -27,6 +27,7 @@ model_configs = {
 batch_size = 12
 workers = 8
 input_size = 768
+set_memory_limit(60)
 
 depth_anything = BatchPredictor(batch_size, workers, input_size, input_size, **model_configs[encoder])
 depth_anything.load_state_dict(torch.load(f'../../checkpoints/depth_anything_v2_{encoder}.pth', map_location='cpu'))
