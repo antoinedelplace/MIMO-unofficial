@@ -1,6 +1,7 @@
 import time
 from functools import wraps
 import numpy as np
+import torch
 import resource
 
 def time_it(func):
@@ -35,14 +36,14 @@ def iou(mask1, mask2):
     """
     assert mask1.shape == mask2.shape, "Masks must have the same dimensions"
 
-    intersection = np.logical_and(mask1, mask2).sum()
-    union = np.logical_or(mask1, mask2).sum()
+    # Use bitwise operations to calculate intersection and union
+    intersection = torch.sum(mask1 & mask2)
+    union = torch.sum(mask1 | mask2)
 
     if union == 0:
         return 0.0  # Avoid division by zero
     
-    iou = intersection / union
-    return iou
+    return intersection / union
 
 def set_memory_limit(max_memory_gb):
     max_memory_bytes = max_memory_gb * 1024 * 1024 * 1024

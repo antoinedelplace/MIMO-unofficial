@@ -14,7 +14,7 @@ from detectron2.structures import Instances
 from sam2.build_sam import build_sam2_video_predictor
 
 from utils.video_utils import frame_gen_from_video
-from utils.general_utils import iou
+from utils.general_utils import iou, set_memory_limit
 
 input_path = "../../data/resized_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"
 depth_input_folder = "../../data/depth_data/"
@@ -30,6 +30,7 @@ log_path = os.path.join(human_output_folder, "error_log.txt")
 batch_size = 24
 workers = 8
 score_threshold = 0.7
+set_memory_limit(60)
 checkpoint = "../../checkpoints/sam2.1_hiera_large.pt"
 model_cfg = "../sam2/configs/sam2.1/sam2.1_hiera_l.yaml"
 predictor = build_sam2_video_predictor(model_cfg, checkpoint)
@@ -64,6 +65,21 @@ def get_global_indexes_foreground_objects(instance_sam_output, depth_video, dete
                     global_indexes.append(i_global)
 
     return global_indexes
+
+def get_global_indexes_filtered_already_in_mask(global_indexes, sam_output, detectron2_data):
+    indexes_to_remove = []
+    i_global_indexes = 0
+    for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
+        pred_mask = (out_mask_logits > 0).squeeze().to(torch.bool).cpu()
+        while i_global_indexes < len(global_indexes) and detectron2_data["data_frame_index"][global_indexes[i_global_indexes]] < out_frame_idx:
+            i_global_indexes += 1
+        while i_global_indexes < len(global_indexes) and detectron2_data["data_frame_index"][global_indexes[i_global_indexes]] <= out_frame_idx:
+            if iou(pred_mask, detectron2_data["data_pred_masks"][global_indexes[i_global_indexes]]) >= 0.7:
+                indexes_to_remove.append(i_global_indexes)
+            i_global_indexes += 1
+
+    new_global_indexes = [global_indexes[i] for i in range(len(global_indexes)) if i not in indexes_to_remove]
+    return new_global_indexes
 
 def visualize(instance_sam_output, video, input_path):
     video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning
@@ -125,7 +141,7 @@ def run_on_video(input_path):
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    detectron2_data = np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz"))
+    detectron2_data = dict(np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz")))
     depth_video = cv2.VideoCapture(os.path.join(depth_input_folder, basename))
 
     i_first_frame = get_index_first_frame_with_character(detectron2_data)
@@ -136,44 +152,47 @@ def run_on_video(input_path):
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         state = predictor.init_state(input_path)
 
-        # add new prompts and instantly get the output on the same frame
         predictor.add_new_points_or_box(inference_state=state, 
                                         frame_idx=detectron2_data["data_frame_index"][i_biggest_human],
                                         obj_id=detectron2_data["data_pred_classes"][i_biggest_human],
                                         box=detectron2_data["data_pred_boxes"][i_biggest_human])
 
-        # propagate the prompts to get masklets throughout the video
         sam_output = list(predictor.propagate_in_video(state))
     
-    out_frames_idx = [x[0] for x in sam_output]
-    min_frame_idx = min(out_frames_idx)
-    max_frame_idx = max(out_frames_idx)
-    if max_frame_idx - min_frame_idx < 24:
-        raise Exception("Number of frames where human is detected is too low.")
-    
-    instance_sam_output = [Instances((width, height))]*num_frames
-    
-    for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
-        instance_sam_output[out_frame_idx] = instance_sam_output[out_frame_idx].cat([Instances((width, height), 
-                                      pred_classes=torch.tensor(out_obj_ids, dtype=torch.int8), 
-                                      pred_masks=(out_mask_logits > 0)[0].to(torch.bool).cpu())])
-    
-    # instance_detectron2 = [Instances((width, height))]*num_frames
-    
-    # for frame_index, pred_classes, pred_boxes, data_scores, data_pred_masks in zip(detectron2_data["data_frame_index"], 
-    #                                                        detectron2_data["data_pred_classes"],
-    #                                                        detectron2_data["data_pred_boxes"],
-    #                                                        detectron2_data["data_scores"],
-    #                                                        detectron2_data["data_pred_masks"]):
-    #     instance_detectron2[frame_index] = instance_detectron2[frame_index].cat([Instances((width, height), 
-    #                                   pred_classes=pred_classes, 
-    #                                   pred_boxes=pred_boxes,
-    #                                   scores=data_scores,
-    #                                   pred_masks=data_pred_masks)])
+        out_frames_idx = [x[0] for x in sam_output]
+        min_frame_idx = min(out_frames_idx)
+        max_frame_idx = max(out_frames_idx)
+        if max_frame_idx - min_frame_idx < 24:
+            raise Exception("Number of frames where human is detected is too low.")
+        
+        instance_sam_output = [Instances((width, height))]*num_frames
+        
+        for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
+            instance_sam_output[out_frame_idx] = instance_sam_output[out_frame_idx].cat([Instances((width, height), 
+                                        pred_classes=torch.tensor(out_obj_ids, dtype=torch.int8), 
+                                        pred_masks=(out_mask_logits > 0)[0].to(torch.bool).cpu())])
 
-    global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data)
-    print("global_indexes_foreground_objects", global_indexes_foreground_objects)
-    #visualize(instance_sam_output, video, input_path)
+        #visualize(instance_sam_output, video, input_path)
+
+        global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data)
+        print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
+
+        foreground_mask = torch.zeros((num_frames, width, height), dtype=bool)
+        while len(global_indexes_foreground_objects) > 0:
+            predictor.reset_state(state)
+
+            predictor.add_new_points_or_box(inference_state=state, 
+                                            frame_idx=detectron2_data["data_frame_index"][global_indexes_foreground_objects[0]],
+                                            obj_id=detectron2_data["data_pred_classes"][global_indexes_foreground_objects[0]],
+                                            box=detectron2_data["data_pred_boxes"][global_indexes_foreground_objects[0]])
+
+            sam_output = list(predictor.propagate_in_video(state))
+
+            for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
+                foreground_mask[out_frame_idx] += (out_mask_logits > 0).squeeze().to(torch.bool).cpu()
+
+            global_indexes_foreground_objects = get_global_indexes_filtered_already_in_mask(global_indexes_foreground_objects, sam_output, detectron2_data)
+            print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
 
     depth_video.release()
     video.release()
