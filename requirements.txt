@@ -10,3 +10,14 @@ xformers
 
 # for efficient video reading and processing (used by sam2)
 decord
+
+pytorch-lightning
+
+# efficiently reading and processing large-scale datasets (for 4D-Humans)
+webdataset
+
+scikit-image
+
+git+https://github.com/facebookresearch/pytorch3d.git@stable
+
+PyOpenGL-accelerate
