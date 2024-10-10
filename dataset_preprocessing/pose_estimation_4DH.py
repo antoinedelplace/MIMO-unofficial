@@ -30,13 +30,15 @@ def make_iterable(obj):
 
 cfg.SMPL = make_iterable(cfg.SMPL)
 cfg.render.enable = False
-
-cfg.video.source = "../../data/human_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"
-
-print("cfg", cfg)
+cfg.video.extract_video = False
+cfg.video.source = None
+cfg.video.start_frame=None
+cfg.video.end_frame=None
+cfg.video.start_time=None
+cfg.video.end_time=None
+cfg.post_process.phalp_pkl_path = None
 
 phalp_tracker = HMR2_4dhuman(cfg)
-phalp_tracker.track()
 
 def run_on_video(input_path):
     # skeleton = Skeleton("skeleton")
@@ -75,29 +77,23 @@ def run_on_video(input_path):
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frames_per_second = video.get(cv2.CAP_PROP_FPS)
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    # print("basename", basename)
-    # print("width", width)
-    # print("height", height)
-    # print("frames_per_second", frames_per_second)
-    # print("num_frames", num_frames)
-    
-    frame_gen = frame_gen_from_video(video)
+    print("basename", basename)
+    print("width", width)
+    print("height", height)
+    print("frames_per_second", frames_per_second)
+    print("num_frames", num_frames)
 
-    # for output_batch in depth_anything.infer_video(frame_gen):
-    #     mini = output_batch.min()
-    #     depth = (output_batch - mini) / (output_batch.max() - mini) * 255.0
-    #     depth = depth.astype(np.uint8)
-    #     depth = np.repeat(depth[..., np.newaxis], 3, axis=-1)
+    phalp_tracker.io_manager.input_path = input_path
+    final_visuals_dic, pkl_path = phalp_tracker.track()
 
-    #     for frame in depth:
-    #         output_file.write(frame)
+    # print("final_visuals_dic", final_visuals_dic)
+    print("len(final_visuals_dic)", len(final_visuals_dic))
 
     video.release()
 
 
-input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
+input_files = ["../../data/human_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
 run_on_video(input_files[0])
-print(1/0)
 
 # input_files = sorted(os.listdir(input_folder))
 output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
@@ -108,7 +104,7 @@ for filename in tqdm.tqdm(input_files):
         continue
 
     input_path = os.path.join(input_folder, filename)
-    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
+    # try_wrapper(lambda: run_on_video(input_path), filename, log_path)
 
 
 # python dataset_preprocessing/pose_estimation_4DH.py
@@ -116,9 +112,5 @@ for filename in tqdm.tqdm(input_files):
 
 
 # Renderer needs to be removed to avoid OpenGL errors
-
 # in 4D-Humans/hmr2/models/__init__.py line 84
 # model = HMR2.load_from_checkpoint(checkpoint_path, strict=False, cfg=model_cfg, init_renderer=False)
-
-# in PHALP/phalp/trackers/PHALP.py line 62
-# Remove line self.setup_visualizer()

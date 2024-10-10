@@ -2,11 +2,13 @@ import sys
 sys.path.append("../4D-Humans")
 sys.path.append("../PHALP")
 
-import os
+import os, cv2
 import torch
 import numpy as np
 
 from typing import Optional, Tuple
+
+from utils.video_utils import frame_gen_from_video
 
 from phalp.models.hmar.hmr import HMR2018Predictor
 from phalp.trackers.PHALP import PHALP
@@ -135,9 +137,41 @@ class HMR2023TextureSampler(HMR2Predictor):
         }
         return out
 
+class IO_Manager():
+    def __init__(self):
+        self.video = None
+        self.input_path = None
+        self.frames = None
+
+    def get_frames_from_source(self):
+        self.video = cv2.VideoCapture(self.input_path)
+        self.frames = list(frame_gen_from_video(self.video))
+        io_data = {
+            "list_of_frames": np.arange(len(self.frames)).tolist(),
+            "additional_data": {},
+            "video_name": os.path.basename(self.input_path),
+        }
+
+        return io_data
+
+    def read_frame(self, frame_id):
+        return self.frames[frame_id]
+    
+    def close_video(self):
+        if self.video is not None:
+            self.video.release()
+        self.video = None
+        self.input_path = None
+        self.frames = None
+
 class HMR2_4dhuman(PHALP):
     def __init__(self, cfg):
         super().__init__(cfg)
+
+        self.io_manager = IO_Manager()
+    
+    def setup_visualizer(self):
+        pass
 
     def setup_hmr(self):
         self.HMAR = HMR2023TextureSampler(self.cfg)
