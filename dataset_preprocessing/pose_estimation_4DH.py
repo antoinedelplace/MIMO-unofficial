@@ -43,6 +43,7 @@ cfg.post_process.phalp_pkl_path = None
 phalp_tracker = HMR2_4dhuman(cfg)
 
 def visualize_poses(data_poses, input_path):
+    # TODO
     skeleton = Skeleton("skeleton")
     skeleton.set_local_position(torch.Tensor([0, 1, 0]))
 
@@ -67,6 +68,7 @@ def visualize_poses(data_poses, input_path):
     visualize_joints_3d(points, f"poses_{basename}")
 
 def visualize_joints_3d(data_joints_3d, input_path):
+    # TODO
     chains = get_chains_from_bones_hierarchy(SMPL_hierarchy)
 
     basename = os.path.basename(input_path)
@@ -77,7 +79,7 @@ def visualize_joints_3d(data_joints_3d, input_path):
                                show=False,
                                save_path=os.path.join(output_folder, f"joints_3d_{basename}"))
 
-def visualize_joints_2d(data_joints_2d, input_path):
+def visualize_joints_2d(data_joints_2d, input_path, chains=None):
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -99,25 +101,25 @@ def visualize_joints_2d(data_joints_2d, input_path):
         isColor=True,
     )
 
-    n_joints = len(SMPL_bones)
-    chains = get_chains_from_bones_hierarchy(SMPL_hierarchy)
-
     frame_gen = frame_gen_from_video(video)
 
-    for frame, pred in tqdm.tqdm(zip(frame_gen, data_joints_2d)):
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        for i in range(len(pred)):
-            frame.scatter(pred[i, 0], pred[i, 1])
-            
-        # for index, chain in enumerate(chains):
-        #     x_chain = np.asarray([pred[i, 0] for i in chain])
-        #     y_chain = np.asarray([pred[i, 1] for i in chain])
+    data_joints_2d = data_joints_2d*width
 
-        #     frame.plot(x_chain, y_chain, marker=".", markersize=10)
+    for frame, pred in tqdm.tqdm(zip(frame_gen, data_joints_2d)):
+        vis_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        if chains is None:
+            for i in range(len(pred)):
+                cv2.circle(vis_frame, (int(pred[i, 0]), int(pred[i, 1])), radius=5, color=(255, 0, 0), thickness=-1)
+        else:
+            for index, chain in enumerate(chains):
+                x_chain = np.asarray([pred[i, 0] for i in chain])
+                y_chain = np.asarray([pred[i, 1] for i in chain])
+
+                frame.plot(x_chain, y_chain, marker=".", markersize=10)
 
         # Converts Matplotlib RGB format to OpenCV BGR format
-        vis_frame = cv2.cvtColor(vis_frame.get_image(), cv2.COLOR_RGB2BGR)
+        vis_frame = cv2.cvtColor(vis_frame, cv2.COLOR_RGB2BGR)
         output_file.write(vis_frame)
 
     output_file.release()
@@ -126,9 +128,6 @@ def visualize_joints_2d(data_joints_2d, input_path):
 def run_on_video(input_path):
     phalp_tracker.io_manager.input_path = input_path
     outputs, _ = phalp_tracker.track()
-
-    print("outputs", outputs)
-    print("len(outputs)", len(outputs))
 
     basename = os.path.basename(input_path)
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
@@ -157,20 +156,17 @@ def run_on_video(input_path):
                         data_joints_3d=data_joints_3d,
                         data_joints_2d=data_joints_2d)
 
-    outputs = dict(np.load(output_path))
-    data_joints_2d = outputs["data_joints_2d"]
-    data_joints_3d = outputs["data_joints_3d"]
-    data_poses = outputs["data_poses"]
-    visualize_joints_2d(data_joints_2d, input_path)
-    visualize_joints_3d(data_joints_3d, input_path)
-    visualize_poses(data_poses, input_path)
+    # outputs = dict(np.load(output_path))
+    # data_joints_2d = outputs["data_joints_2d"]
+    # data_joints_3d = outputs["data_joints_3d"]
+    # data_poses = outputs["data_poses"]
+    # visualize_joints_2d(data_joints_2d, input_path)
+    # visualize_joints_3d(data_joints_3d, input_path)
+    # visualize_poses(data_poses, input_path)
 
 
-
-input_files = ["../../data/human_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
-run_on_video(input_files[0])
-
-# input_files = sorted(os.listdir(input_folder))
+# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
+input_files = sorted(os.listdir(input_folder))
 output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
 
 for filename in tqdm.tqdm(input_files):
@@ -179,7 +175,7 @@ for filename in tqdm.tqdm(input_files):
         continue
 
     input_path = os.path.join(input_folder, filename)
-    # try_wrapper(lambda: run_on_video(input_path), filename, log_path)
+    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
 
 
 # python dataset_preprocessing/pose_estimation_4DH.py
