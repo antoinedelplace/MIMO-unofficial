@@ -4,6 +4,8 @@ sys.path.append(".")
 import os, cv2, torch, tqdm
 import numpy as np
 
+import pytorch3d.transforms as pt3d
+
 from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper, set_memory_limit
 from utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
@@ -40,36 +42,42 @@ cfg.post_process.phalp_pkl_path = None
 
 phalp_tracker = HMR2_4dhuman(cfg)
 
-def run_on_video(input_path):
-    # skeleton = Skeleton("skeleton")
-    # skeleton.set_local_position(torch.Tensor([0, 1, 0]))
+def visualize_poses(data_poses, input_path):
+    skeleton = Skeleton("skeleton")
+    skeleton.set_local_position(torch.Tensor([0, 1, 0]))
 
-    # skeleton.construct_from_zero_pose(SMPL_bones, SMPL_hierarchy)
+    skeleton.construct_from_zero_pose(SMPL_bones, SMPL_hierarchy)
 
-    # n_joints = len(SMPL_bones)
-    # chains = get_chains_from_bones_hierarchy(SMPL_hierarchy)
-    # print("chains", chains)
+    n_joints = len(SMPL_bones)
 
-    # poses = torch.from_numpy(np.load("../../data/gWA_sBM_c01_d25_mWA2_ch01.npy"))
-    # print("poses", poses)
-    # print("np.shape(poses)", np.shape(poses))
+    poses = torch.from_numpy(np.load("../../data/gWA_sBM_c01_d25_mWA2_ch01.npy"))
+    print("poses", poses)
+    print("np.shape(poses)", np.shape(poses))
 
-    # points = np.zeros((len(poses), n_joints, 3))
-    # for i in range(len(poses)):
-    #     skeleton.set_pose_axis_angle(poses[i])
-    #     points[i] = skeleton.get_global_position_joints().reshape(n_joints, 3).numpy()
-    # print("points", points)
-    # print("np.shape(points)", np.shape(points))
+    points = np.zeros((len(poses), n_joints, 3))
+    for i in range(len(poses)):
+        skeleton.set_pose_axis_angle(poses[i])
+        points[i] = skeleton.get_global_position_joints().reshape(n_joints, 3).numpy()
+    print("points", points)
+    print("np.shape(points)", np.shape(points))
 
-    # print("skeleton.get_bone2idx()", [(k.name, v) for k, v in skeleton.get_bone2idx().items()])
+    print("skeleton.get_bone2idx()", [(k.name, v) for k, v in skeleton.get_bone2idx().items()])
 
-    # points_animation_linked_3d(points,
-    #                            chains,
-    #                            joint_labels=None,
-    #                            fps=24,
-    #                            show=False,
-    #                            save_path=os.path.join(output_folder, "test.gif"))
+    basename = os.path.basename(input_path)
+    visualize_joints_3d(points, f"poses_{basename}")
 
+def visualize_joints_3d(data_joints_3d, input_path):
+    chains = get_chains_from_bones_hierarchy(SMPL_hierarchy)
+
+    basename = os.path.basename(input_path)
+    points_animation_linked_3d(data_joints_3d,
+                               chains,
+                               joint_labels=None,
+                               fps=24,
+                               show=False,
+                               save_path=os.path.join(output_folder, f"joints_3d_{basename}"))
+
+def visualize_joints_2d(data_joints_2d, input_path):
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -83,13 +91,80 @@ def run_on_video(input_path):
     print("frames_per_second", frames_per_second)
     print("num_frames", num_frames)
 
-    phalp_tracker.io_manager.input_path = input_path
-    final_visuals_dic, pkl_path = phalp_tracker.track()
+    output_file = cv2.VideoWriter(
+        filename=os.path.join(output_folder, f"joints_2d_{basename}"),
+        fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+        fps=float(frames_per_second),
+        frameSize=(width, height),
+        isColor=True,
+    )
 
-    # print("final_visuals_dic", final_visuals_dic)
-    print("len(final_visuals_dic)", len(final_visuals_dic))
+    n_joints = len(SMPL_bones)
+    chains = get_chains_from_bones_hierarchy(SMPL_hierarchy)
 
+    frame_gen = frame_gen_from_video(video)
+
+    for frame, pred in tqdm.tqdm(zip(frame_gen, data_joints_2d)):
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        for i in range(len(pred)):
+            frame.scatter(pred[i, 0], pred[i, 1])
+            
+        # for index, chain in enumerate(chains):
+        #     x_chain = np.asarray([pred[i, 0] for i in chain])
+        #     y_chain = np.asarray([pred[i, 1] for i in chain])
+
+        #     frame.plot(x_chain, y_chain, marker=".", markersize=10)
+
+        # Converts Matplotlib RGB format to OpenCV BGR format
+        vis_frame = cv2.cvtColor(vis_frame.get_image(), cv2.COLOR_RGB2BGR)
+        output_file.write(vis_frame)
+
+    output_file.release()
     video.release()
+    
+def run_on_video(input_path):
+    phalp_tracker.io_manager.input_path = input_path
+    outputs, _ = phalp_tracker.track()
+
+    print("outputs", outputs)
+    print("len(outputs)", len(outputs))
+
+    basename = os.path.basename(input_path)
+    output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
+
+    n_frames = len(outputs)
+    n_joints = len(SMPL_bones)
+
+    data_poses = np.zeros((n_frames, n_joints, 3))
+    data_cam_trans = np.zeros((n_frames, 3))
+    data_betas = np.zeros((n_frames, 10))
+    data_joints_3d = np.zeros((n_frames, 45, 3))
+    data_joints_2d = np.zeros((n_frames, 45, 2))
+
+    for i in range(len(outputs)):
+        data_poses[i, 0, :] = pt3d.rotation_conversions.matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["global_orient"])).numpy()
+        data_poses[i, 1:, :] = pt3d.rotation_conversions.matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["body_pose"])).numpy()
+        data_cam_trans[i] = outputs[i]["camera"][0]
+        data_betas[i] = outputs[i]["smpl"][0]["betas"]
+        data_joints_3d[i] = outputs[i]["3d_joints"][0]
+        data_joints_2d[i] = outputs[i]["2d_joints"][0].reshape(-1, 2)
+
+    np.savez_compressed(output_path, 
+                        data_poses=data_poses, 
+                        data_cam_trans=data_cam_trans,
+                        data_betas=data_betas,
+                        data_joints_3d=data_joints_3d,
+                        data_joints_2d=data_joints_2d)
+
+    outputs = dict(np.load(output_path))
+    data_joints_2d = outputs["data_joints_2d"]
+    data_joints_3d = outputs["data_joints_3d"]
+    data_poses = outputs["data_poses"]
+    visualize_joints_2d(data_joints_2d, input_path)
+    visualize_joints_3d(data_joints_3d, input_path)
+    visualize_poses(data_poses, input_path)
+
 
 
 input_files = ["../../data/human_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
@@ -114,3 +189,7 @@ for filename in tqdm.tqdm(input_files):
 # Renderer needs to be removed to avoid OpenGL errors
 # in 4D-Humans/hmr2/models/__init__.py line 84
 # model = HMR2.load_from_checkpoint(checkpoint_path, strict=False, cfg=model_cfg, init_renderer=False)
+
+# Remove automatic saving files to speed up inference
+# in PHALP/phalp/trackers/PHALP.py line 264
+# Remove joblib.dump(final_visuals_dic, pkl_path, compress=3)

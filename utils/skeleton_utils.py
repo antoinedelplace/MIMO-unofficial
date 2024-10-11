@@ -469,21 +469,6 @@ def points_animation_linked_3d(points,
                                show=False,
                                save_path=None):
     """
-    # For saving big animations :
-    # https://github.com/ImageMagick/ImageMagick/issues/396
-    # In /etc/ImageMagick-6/policy.xml
-    #       Resource limits:
-    #       Width: 128KP
-    #       Height: 128KP
-    #       Area: 1.0737GP
-    #       Memory: 2GiB
-    #       Map: 4GiB
-    #       Disk: 8GiB
-    #       File: 768
-    #       Thread: 4
-    #       Throttle: 0
-    #       Time: unlimited
-
     Inputs :
         - points: (N, 3)
         - chains: list of list - if [0, 5, 9] is in it, it means 0 is the parent of 5 which is the parent of 9
@@ -536,6 +521,6 @@ def points_animation_linked_3d(points,
     ani = animation.FuncAnimation(fig, update_points, frames=np.shape(points)[0], fargs=(x, y, z, chains), interval=fps, init_func=ax.cla)
 
     if show: plt.show()
-    if save_path: ani.save(save_path, writer='imagemagick', fps=fps)
+    if save_path: ani.save(save_path, writer=animation.FFMpegWriter(fps=fps))
 
     plt.close(fig)
