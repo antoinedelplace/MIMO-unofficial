@@ -6,6 +6,57 @@ import pytorch3d.transforms as pt3d
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
+Openpose_25_bones = ["Nose",           # 0
+                     "Neck",           # 1
+                     "RShoulder",      # 2
+                     "RElbow",         # 3
+                     "RWrist",         # 4
+                     "LShoulder",      # 5
+                     "LElbow",         # 6
+                     "LWrist",         # 7
+                     "Pelvis",         # 8
+                     "RHip",           # 9
+                     "RKnee",          # 10
+                     "RAnkle",         # 11
+                     "LHip",           # 12
+                     "LKnee",          # 13
+                     "LAnkle",         # 14
+                     "REye",           # 15
+                     "LEye",           # 16
+                     "REar",           # 17
+                     "LEar",           # 18
+                     "LSole",          # 19
+                     "LToe",           # 20
+                     "LHeel",          # 21
+                     "RSole",          # 22
+                     "RToe",           # 23
+                     "RHeel"]          # 24 
+
+Openpose_25_hierarchy = np.array([[0, 1],
+                                  [1, 2],
+                                  [2, 3], 
+                                  [3, 4],
+                                  [1, 5],
+                                  [5, 6],
+                                  [6, 7],
+                                  [1, 8],
+                                  [8, 9],
+                                  [9, 10],
+                                  [10, 11],
+                                  [11, 24],
+                                  [11, 22],
+                                  [22, 23],
+                                  [8, 12],
+                                  [12, 13],
+                                  [13, 14],
+                                  [14, 21],
+                                  [14, 19],
+                                  [19, 20],
+                                  [0, 15],
+                                  [15, 17],
+                                  [0, 16],
+                                  [16, 18]])
+
 SMPL_bones = [
     {"name": "m_avg_Pelvis", "x": 3.133900463581085e-05 , "y": -0.2356526404619217 , "z": 0.01718907244503498 },
     {"name": "m_avg_L_Hip", "x": 0.05390536040067673 , "y": -0.3188248574733734 , "z": -0.0030965283513069153 },

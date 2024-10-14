@@ -9,7 +9,7 @@ import pytorch3d.transforms as pt3d
 from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper, set_memory_limit
 from utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
-from utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
+from utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Openpose_25_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
 
 input_folder = "../../data/human_data/"
 output_folder = "../../data/poses_4DH_data/"
@@ -108,15 +108,15 @@ def visualize_joints_2d(data_joints_2d, input_path, chains=None):
     for frame, pred in tqdm.tqdm(zip(frame_gen, data_joints_2d)):
         vis_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        if chains is None:
-            for i in range(len(pred)):
-                cv2.circle(vis_frame, (int(pred[i, 0]), int(pred[i, 1])), radius=5, color=(255, 0, 0), thickness=-1)
-        else:
-            for index, chain in enumerate(chains):
-                x_chain = np.asarray([pred[i, 0] for i in chain])
-                y_chain = np.asarray([pred[i, 1] for i in chain])
+        if chains is not None:
+            for chain in chains:
+                for i in range(len(chain) - 1):  # Loop through each chain and draw lines
+                    pt1 = (int(pred[chain[i], 0]), int(pred[chain[i], 1]))  # Starting point
+                    pt2 = (int(pred[chain[i + 1], 0]), int(pred[chain[i + 1], 1]))  # Ending point
+                    cv2.line(vis_frame, pt1, pt2, color=(0, 255, 0), thickness=2)  # Green lines connecting points
 
-                frame.plot(x_chain, y_chain, marker=".", markersize=10)
+        for i in range(len(pred)):
+            cv2.circle(vis_frame, (int(pred[i, 0]), int(pred[i, 1])), radius=5, color=(255, 0, 0), thickness=-1)
 
         # Converts Matplotlib RGB format to OpenCV BGR format
         vis_frame = cv2.cvtColor(vis_frame, cv2.COLOR_RGB2BGR)
@@ -160,10 +160,10 @@ def run_on_video(input_path):
     # data_joints_2d = outputs["data_joints_2d"]
     # data_joints_3d = outputs["data_joints_3d"]
     # data_poses = outputs["data_poses"]
-    # visualize_joints_2d(data_joints_2d, input_path)
+    # openpose_chains = get_chains_from_bones_hierarchy(Openpose_25_hierarchy)
+    #visualize_joints_2d(data_joints_2d[:, :25, :], input_path, openpose_chains)
     # visualize_joints_3d(data_joints_3d, input_path)
     # visualize_poses(data_poses, input_path)
-
 
 # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
 input_files = sorted(os.listdir(input_folder))
