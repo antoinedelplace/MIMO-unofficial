@@ -4,11 +4,11 @@ sys.path.append("../nvdiffrast")
 
 import os, cv2, torch, tqdm
 import numpy as np
-import scipy.spatial
 
 import nvdiffrast.torch as dr
 
 from utils.general_utils import try_wrapper, set_memory_limit
+from utils.rasterizer_utils import triangles, vertex_attrs
 
 input_folder = "../../data/poses_4DH_data/"
 output_folder = "../../data/rasterized_2D_joints_data/"
@@ -23,7 +23,7 @@ workers = 8
 input_size = 768
 set_memory_limit(60)
 
-def visualize(feature_map, basename):
+def save(feature_map, basename):
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename).replace(".npz", ".mp4"),
         fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
@@ -33,9 +33,7 @@ def visualize(feature_map, basename):
     )
 
     for frame in tqdm.tqdm(feature_map):
-        frame_uint8 = (frame * 255).astype(np.uint8)
-        frame_color = cv2.applyColorMap(frame_uint8, cv2.COLORMAP_VIRIDIS)
-        output_file.write(frame_color)
+        output_file.write((frame * 255).clip(min=0, max=255).astype(np.uint8))
 
     output_file.release()
     
@@ -46,18 +44,8 @@ def run_on_video(input_path):
 
     outputs = dict(np.load(input_path))
     data_joints_2d = outputs["data_joints_2d"]  # Shape: [n_batch, n_joints, 2]
-    # data_joints_2d[:, :, 0] *= width
-    # data_joints_2d[:, :, 1] *= height
-    print("np.max(data_joints_2d[:, :, 0])", np.max(data_joints_2d[:, :, 0]))
-    print("np.min(data_joints_2d[:, :, 0])", np.min(data_joints_2d[:, :, 0]))
-    print("np.max(data_joints_2d[:, :, 1])", np.max(data_joints_2d[:, :, 1]))
-    print("np.min(data_joints_2d[:, :, 1])", np.min(data_joints_2d[:, :, 1]))
 
     n_batch, n_joints, _ = data_joints_2d.shape
-    
-    mean_points_2d = np.mean(data_joints_2d[:, :, :2], axis=0)  # Shape: [n_joints, 2]
-    tri = scipy.spatial.Delaunay(mean_points_2d)
-    triangles = torch.from_numpy(tri.simplices).to(torch.int32).cuda()
 
     data_joints_2d = torch.from_numpy(data_joints_2d).to(torch.float32).cuda()
 
@@ -71,10 +59,10 @@ def run_on_video(input_path):
     # Rasterization step: get pixel coverage and barycentric coordinates
     rast_out, _ = dr.rasterize(rast_ctx, vertices, triangles, resolution=[height, width])
 
-    vertex_features = torch.ones((n_batch, n_joints, 1), dtype=torch.float32).cuda()*0.5
+    batch_vertex_attrs = vertex_attrs.unsqueeze(0).expand(n_batch, -1, -1).contiguous()  # Shape: [n_batch, n_joints, 3]
 
     # Interpolate vertex features over the rasterized output
-    interpolated_features, _ = dr.interpolate(vertex_features, rast_out, triangles)
+    interpolated_features, _ = dr.interpolate(batch_vertex_attrs, rast_out, triangles)
 
     # Apply masking to retain only valid pixels
     mask = rast_out[..., 3:] > 0  # Valid pixels have alpha > 0
@@ -83,17 +71,8 @@ def run_on_video(input_path):
     # Resulting interpolated 2D feature map (n_batch, height, width)
     feature_map = interpolated_features.squeeze().cpu().numpy()
 
-    print("np.unique(feature_map)", np.unique(feature_map))
-    print("np.shape(feature_map)", np.shape(feature_map))
-    print("np.max(feature_map)", np.max(feature_map))
-    print("np.min(feature_map)", np.min(feature_map))
-    visualize(feature_map, basename)
+    save(feature_map, basename)
 
-    # np.savez_compressed(os.path.join(output_folder, basename), 
-    #                     data_joints_2d=data_joints_2d)
-
-run_on_video("../../data/poses_4DH_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.npz")
-print(1/0)
 
 # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.npz"]
 input_files = sorted(os.listdir(input_folder))
