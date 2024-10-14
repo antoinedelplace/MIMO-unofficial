@@ -1,7 +1,8 @@
 # MIMO-unofficial
 Unofficial implementation of MIMO (MImicking anyone anywhere with complex Motions and Object interactions)
 
-Original paper available here: [![arXiv](https://img.shields.io/badge/arXiv-2409.16160-00ff00.svg)](https://arxiv.org/abs/2409.16160)
+My blog post: [![Medium](https://img.shields.io/badge/Medium-12100E?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@delplaceantoine/mastering-mimo-mimicking-anyone-anywhere-with-complex-motions-and-object-interactions-e8598d9d97d6)
+Original paper: [![arXiv](https://img.shields.io/badge/arXiv-2409.16160-00ff00.svg)](https://arxiv.org/abs/2409.16160)
 
 ## Installation and Setup
 Tests were made using:

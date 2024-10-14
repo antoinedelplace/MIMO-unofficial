@@ -21,3 +21,6 @@ scikit-image
 git+https://github.com/facebookresearch/pytorch3d.git@stable
 
 PyOpenGL-accelerate
+
+# speeds up the process of compiling C++ extensions (for nvdiffrast)
+ninja
