@@ -39,7 +39,8 @@ def save(comp_frames, input_path, masks_dilated=None):
 
     if masks_dilated is None:
         for frame in comp_frames:
-            output_file.write(frame)
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            output_file.write(frame_bgr)
     else:
         alpha = 0.5
         for frame, mask in zip(comp_frames, masks_dilated):
