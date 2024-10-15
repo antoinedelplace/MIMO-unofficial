@@ -31,7 +31,8 @@ pip install -r requirements.txt
 │   ├── PHALP
 │   ├── detectron2
 │   ├── sam2
-│   └── nvdiffrast
+│   ├── nvdiffrast
+│   └── ProPainter
 ├── checkpoints
 └── data
 ```
@@ -43,6 +44,7 @@ pip install -r requirements.txt
 - [detectron2](https://github.com/facebookresearch/detectron2)
 - [sam2](https://github.com/facebookresearch/sam2)
 - [nvdiffrast](https://github.com/NVlabs/nvdiffrast)
+- [ProPainter](https://github.com/sczhou/ProPainter.git)
 
 ### Download checkpoints
 - [depth_anything_v2_vitl.pth](https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth)
