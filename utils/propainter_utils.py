@@ -251,10 +251,9 @@ def inpaint(input_path, fix_raft, fix_flow_complete, model, use_half = True):
 
     w = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    # frames_len = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    frames_len = 50
+    frames_len = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    frames = read_frame_from_videos(frame_gen_from_video(video))[:50]
+    frames = read_frame_from_videos(frame_gen_from_video(video))
     masks_dilated = infer_mask(frames)
 
     frames_tensor = to_tensor(frames).unsqueeze(0) * 2 - 1
@@ -262,19 +261,14 @@ def inpaint(input_path, fix_raft, fix_flow_complete, model, use_half = True):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     frames_tensor, masks_dilated_tensor = frames_tensor.to(device), masks_dilated_tensor.to(device)
-    print("frames_tensor.shape", frames_tensor.shape)
 
     gt_flows_bi = compute_flow(frames_tensor, frames_len, fix_raft)
-    print("gt_flows_bi[0].shape", gt_flows_bi[0].shape)
-    print("gt_flows_bi[1].shape", gt_flows_bi[1].shape)
 
     if use_half:
         frames_tensor, masks_dilated_tensor = frames_tensor.half(), masks_dilated_tensor.half()
         gt_flows_bi = (gt_flows_bi[0].half(), gt_flows_bi[1].half())
     
     pred_flows_bi = complete_flow(gt_flows_bi, subvideo_length, masks_dilated_tensor, fix_flow_complete)
-    print("pred_flows_bi[0].shape", pred_flows_bi[0].shape)
-    print("pred_flows_bi[1].shape", pred_flows_bi[1].shape)
     
     updated_frames, updated_masks = image_propagation(
         frames_tensor,
@@ -285,8 +279,6 @@ def inpaint(input_path, fix_raft, fix_flow_complete, model, use_half = True):
         model,
         h,
         w)
-    print("updated_frames.shape", updated_frames.shape)
-    print("updated_masks.shape", updated_masks.shape)
     
     comp_frames = features_propagation_transformer(
         frames_len, 
@@ -299,7 +291,6 @@ def inpaint(input_path, fix_raft, fix_flow_complete, model, use_half = True):
         pred_flows_bi,
         model,
         frames)
-    print("np.shape(comp_frames)", np.shape(comp_frames))
     
     video.release()
 
