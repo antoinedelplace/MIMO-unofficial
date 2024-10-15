@@ -24,3 +24,6 @@ PyOpenGL-accelerate
 
 # speeds up the process of compiling C++ extensions (for nvdiffrast)
 ninja
+
+diffusers
+accelerate

@@ -26,6 +26,7 @@ pip install -r requirements.txt
 ```bash
 ├── code
 │   ├── MIMO-unofficial
+│   ├── AnimateAnyone
 │   ├── Depth-Anything-V2
 │   ├── 4D-Humans
 │   ├── PHALP
@@ -38,6 +39,7 @@ pip install -r requirements.txt
 ```
 
 ### Clone external repositories and Install requirements
+- [AnimateAnyone](https://github.com/novitalabs/AnimateAnyone)
 - [Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
 - [4D-Humans](https://github.com/shubham-goel/4D-Humans)
 - [PHALP](https://github.com/brjathu/PHALP)
