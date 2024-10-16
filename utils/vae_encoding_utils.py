@@ -36,8 +36,7 @@ class VaeBatchPredictor():
     ):
         self.vae = AutoencoderKL.from_pretrained(
             os.path.join(checkpoints_folder, "sd-vae-ft-mse"), 
-            torch_dtype=torch.float16,
-            revision="fp16",
+            torch_dtype=torch.bfloat16,
             use_safetensors=True
         ).to("cuda")
         self.batch_size = batch_size
@@ -49,8 +48,8 @@ class VaeBatchPredictor():
             # the model expects RGB inputs
             image = image[:, :, ::-1] / 255.0 * 2 - 1
 
-            image = image.astype("float16").transpose(2, 0, 1)
-            image = torch.as_tensor(image)
+            image = image.transpose(2, 0, 1)
+            image = torch.as_tensor(image, dtype=torch.bfloat16)
             data.append(image)
         return torch.stack(data, dim=0)
     
@@ -58,7 +57,7 @@ class VaeBatchPredictor():
         data = []
         for latent in batch:
             latent = latent / 0.18215
-            latent = torch.as_tensor(latent.astype("float16"))
+            latent = torch.as_tensor(latent, dtype=torch.bfloat16)
             data.append(latent)
         return torch.stack(data, dim=0)
 
@@ -93,7 +92,7 @@ class VaeBatchPredictor():
             for batch in loader:
                 batch_gpu = batch.to("cuda")
                 image = self.vae.decode(batch_gpu).sample
-                image = ((image + 1) / 2 * 255).clamp(0, 255).to(torch.uint8)
+                image = ((image + 1) / 2 * 255).round().clamp(0, 255).to(torch.uint8)
                 image = image.permute(0, 2, 3, 1)
                 image = image[:, :, :, [2, 1, 0]] #RGB 2 BGR
 

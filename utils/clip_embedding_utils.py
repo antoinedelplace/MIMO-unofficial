@@ -36,9 +36,8 @@ class CLIPBatchPredictor():
     ):
         self.clip_image_processor = CLIPImageProcessor()
         self.image_enc = CLIPVisionModelWithProjection.from_pretrained(
-            os.path.join(checkpoints_folder, "sd-image-variations-diffusers"), 
-            torch_dtype=torch.float16,
-            revision="fp16"
+            os.path.join(checkpoints_folder, "sd-image-variations-diffusers", "image_encoder"), 
+            torch_dtype=torch.bfloat16
         ).to("cuda")
         self.batch_size = batch_size
         self.workers = workers

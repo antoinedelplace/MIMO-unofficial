@@ -14,6 +14,19 @@ class NpzDataset(Dataset):
 
     def __len__(self):
         return len(self.frames)
+
+class DoubleVideoDataset(Dataset):
+    def __init__(self, frame_gen_1, frame_gen_2):
+        self.frames_1 = list(frame_gen_1)
+        self.frames_2 = list(frame_gen_2)
+
+        self.num = len(self.frames_1)*len(self.frames_2)
+
+    def __getitem__(self, index) -> ndarray:
+        return self.frames_1[index // len(self.frames_2)], self.frames_2[index % len(self.frames_2)]
+
+    def __len__(self):
+        return self.num
     
 class VideoDataset(Dataset):
     def __init__(self, frame_gen):

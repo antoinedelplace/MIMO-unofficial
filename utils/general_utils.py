@@ -48,3 +48,13 @@ def iou(mask1, mask2):
 def set_memory_limit(max_memory_gb):
     max_memory_bytes = max_memory_gb * 1024 * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_AS, (max_memory_bytes, max_memory_bytes))
+
+def argmedian(x, axis=None):
+    if axis is None:
+        return np.argpartition(x, len(x) // 2)[len(x) // 2]
+    else:
+        # Compute argmedian along specified axis
+        return np.apply_along_axis(
+            lambda x: np.argpartition(x, len(x) // 2)[len(x) // 2],
+            axis=axis, arr=x
+        )

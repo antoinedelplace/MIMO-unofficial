@@ -27,3 +27,5 @@ ninja
 
 diffusers
 accelerate
+transformers
+peft

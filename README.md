@@ -72,5 +72,11 @@ pip install -r requirements.txt
     in `PHALP/phalp/trackers/PHALP.py` line 264:
     Remove `joblib.dump(final_visuals_dic, pkl_path, compress=3)`
 
+- For `dataset_preprocessing/get_apose_ref.py`
+    - in `AnimateAnyone/src/models/unet_2d_blocks.py` line 9:
+    ```bash
+    from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel
+    ```
+
 ## Note
 - The 45 2D joints are composed of 25+20 joints corresponding to 25 openpose joints and 20 other joints (part of Opentrack?)
