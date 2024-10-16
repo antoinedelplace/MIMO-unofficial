@@ -23,7 +23,7 @@ class BatchPredictor():
         self, 
         batch_size: int,
         workers: int,
-        checkpoint_folder="../checkpoints/",
+        checkpoint_folder="../../checkpoints/",
         use_half=True
     ):
         self.batch_size = batch_size

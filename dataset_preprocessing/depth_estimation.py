@@ -1,6 +1,5 @@
 import sys
 sys.path.append(".")
-sys.path.append("../Depth-Anything-V2")
 
 import os, cv2, torch, tqdm
 import numpy as np

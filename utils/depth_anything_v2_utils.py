@@ -1,3 +1,7 @@
+import sys
+sys.path.append(".")
+sys.path.append("../Depth-Anything-V2")
+
 import torch, cv2
 
 from torch.utils.data import DataLoader
