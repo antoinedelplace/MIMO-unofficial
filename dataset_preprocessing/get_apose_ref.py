@@ -51,8 +51,13 @@ def run_on_video(input_path):
     print("np.shape(input_image)", np.shape(input_image))
 
     a_pose_image = cv2.imread(a_pose_path)
+    print("np.shape(a_pose_image)", np.shape(a_pose_image))
 
-    output_image = reposer([input_image], [a_pose_image])
+    output_image = list(reposer(input_image, [a_pose_image]))[0][0]
+    print("np.shape(output_image)", np.shape(output_image))
+
+    output_path = os.path.join(output_folder, basename).replace(".mp4", ".png")
+    cv2.imwrite(output_path, output_image)
 
     video.release()
 

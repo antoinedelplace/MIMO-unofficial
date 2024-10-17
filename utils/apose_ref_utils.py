@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
+from PIL import Image
 
 from diffusers import DDIMScheduler
 
@@ -21,7 +22,7 @@ from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
 
 from utils.general_utils import argmedian
 from utils.video_utils import frame_from_video
-from utils.torch_utils import DoubleVideoDataset
+from utils.torch_utils import VideoDataset
 
 def download_base_model(checkpoints_folder):
     local_dir = os.path.join(checkpoints_folder, "stable-diffusion-v1-5")
@@ -84,7 +85,7 @@ class ReposerBatchPredictor():
         infer_config = OmegaConf.load("./configs/inference/inference.yaml")
 
         pose_guider = PoseGuider(conditioning_embedding_channels=320).to(
-            dtype=torch.bfloat16, device="cuda"
+            dtype=torch.float16, device="cuda"
         )
         pose_guider.load_state_dict(
             torch.load(os.path.join(checkpoints_folder, "AnimateAnyone", "pose_guider.pth"), map_location="cpu", weights_only=True),
@@ -92,7 +93,7 @@ class ReposerBatchPredictor():
         
         reference_unet = UNet2DConditionModel.from_pretrained(
             os.path.join(checkpoints_folder, "stable-diffusion-v1-5", "unet"),
-            torch_dtype=torch.bfloat16,
+            torch_dtype=torch.float16,
             use_safetensors=True
         ).to("cuda")
         reference_unet.load_state_dict(
@@ -103,7 +104,7 @@ class ReposerBatchPredictor():
             os.path.join(checkpoints_folder, "stable-diffusion-v1-5", "unet"),
             os.path.join(checkpoints_folder, "AnimateAnyone", "motion_module.pth"),
             unet_additional_kwargs=infer_config.unet_additional_kwargs,
-        ).to(torch.bfloat16).to("cuda")
+        ).to(torch.float16).to("cuda")
         denoising_unet.load_state_dict(
             torch.load(os.path.join(checkpoints_folder, "AnimateAnyone", "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
@@ -119,38 +120,49 @@ class ReposerBatchPredictor():
             denoising_unet=denoising_unet,
             pose_guider=pose_guider,
             scheduler=scheduler,
-        ).to("cuda", dtype=torch.bfloat16)
+        ).to("cuda", dtype=torch.float16)
 
         self.batch_size = batch_size
         self.workers = workers
+    
+    def collate(self, batch):
+        data_pose_image_pil = []
+        for pose_frame in batch:
+            data_pose_image_pil.append(Image.fromarray(pose_frame).convert("RGB"))
+        return data_pose_image_pil
 
-    def __call__(self, frame_gen, pose_frame_gen, seed=12345):
+    def __call__(self, reference_image, pose_frame_gen, seed=12345):
         cfg = 3.5
         steps = 30
 
-        dataset = DoubleVideoDataset(frame_gen, pose_frame_gen)
+        dataset = VideoDataset(pose_frame_gen)
         loader = DataLoader(
             dataset,
             self.batch_size,
             shuffle=False,
             num_workers=self.workers,
+            collate_fn=self.collate,
             pin_memory=True
         )
-        with torch.no_grad():
-            for batch in loader:
-                batch_gpu = batch.to("cuda")
-                print("batch_gpu.shape", batch_gpu.shape)
 
-                
+        reference_image_pil = Image.fromarray(reference_image).convert("RGB")
+
+        with torch.no_grad():
+            for batch_pose_images_pil in loader:
                 video = self.pipe(
-                    ref_image_pil,
-                    pose_list,
-                    width,
-                    height,
-                    n_frames=len(batch_gpu),
-                    steps=steps,
-                    cfg=cfg,
+                    reference_image_pil,
+                    batch_pose_images_pil,
+                    width=768,
+                    height=768,
+                    video_length=len(batch_pose_images_pil),
+                    num_inference_steps=steps,
+                    guidance_scale=cfg,
                     generator=torch.manual_seed(seed),
                 ).videos
 
-                yield latent.cpu().numpy()
+                video = video.squeeze(2)
+                video = (video * 255).round().clamp(0, 255).to(torch.uint8)
+                video = video.permute(0, 2, 3, 1)
+                video = video[:, :, :, [2, 1, 0]] #RGB 2 BGR
+
+                yield video.cpu().numpy()
