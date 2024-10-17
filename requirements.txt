@@ -29,3 +29,9 @@ diffusers
 accelerate
 transformers
 peft
+
+# for DWPose
+controlnet-aux
+onnxruntime-gpu
+openmim
+mediapipe

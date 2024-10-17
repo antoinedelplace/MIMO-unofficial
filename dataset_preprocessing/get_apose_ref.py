@@ -6,7 +6,7 @@ import numpy as np
 
 from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper, set_memory_limit
-from utils.apose_ref_utils import download_base_model, download_anyone, get_frame_with_median_mask, ReposerBatchPredictor
+from utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, get_frame_with_median_mask, ReposerBatchPredictor, get_kps_image
 from utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
@@ -15,13 +15,15 @@ output_folder = "../../data/apose_ref_data/"
 os.makedirs(output_folder, exist_ok=True)
 log_path = os.path.join(output_folder, "error_log.txt")
 
-a_pose_path = "../../data/a_pose.png"
+# a_pose_raw_path = "../../data/a_pose_raw.png"
+a_pose_kps_path = "../../data/a_pose_kps.png"
 
 checkpoints_folder = "../../checkpoints"
 download_image_encoder(checkpoints_folder)
 download_vae(checkpoints_folder)
 download_base_model(checkpoints_folder)
 download_anyone(checkpoints_folder)
+# download_dwpose(checkpoints_folder)
 
 batch_size = 16
 workers = 8
@@ -50,10 +52,13 @@ def run_on_video(input_path):
     input_image = get_frame_with_median_mask(video, frame_gen)
     print("np.shape(input_image)", np.shape(input_image))
 
-    a_pose_image = cv2.imread(a_pose_path)
-    print("np.shape(a_pose_image)", np.shape(a_pose_image))
+    # a_pose_kps = get_kps_image(a_pose_raw_path, checkpoints_folder)
+    # cv2.imwrite(a_pose_kps_path, a_pose_kps)
 
-    output_image = list(reposer(input_image, [a_pose_image]))[0][0]
+    a_pose_kps = cv2.imread(a_pose_kps_path)
+    print("np.shape(a_pose_image)", np.shape(a_pose_kps))
+
+    output_image = list(reposer(input_image, [a_pose_kps]))[0][0]
     print("np.shape(output_image)", np.shape(output_image))
 
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".png")

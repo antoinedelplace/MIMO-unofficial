@@ -73,6 +73,15 @@ pip install -r requirements.txt
     Remove `joblib.dump(final_visuals_dic, pkl_path, compress=3)`
 
 - For `dataset_preprocessing/get_apose_ref.py`
+    - If you need DWPose to extract 2D pose from an image
+    ```bash
+    pip install -U openmim
+    mim install mmengine
+    mim install "mmcv>=2.0.1"
+    mim install "mmdet>=3.1.0"
+    mim install "mmpose>=1.1.0"
+    ```
+
     - in `AnimateAnyone/src/models/unet_2d_blocks.py` line 9:
     ```bash
     from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel

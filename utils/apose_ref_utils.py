@@ -2,7 +2,7 @@ import sys
 sys.path.append(".")
 sys.path.append("../AnimateAnyone")
 
-import os
+import os, cv2
 from pathlib import Path, PurePosixPath
 from omegaconf import OmegaConf
 
@@ -19,6 +19,8 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.pose_guider import PoseGuider
 from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
+from src.dwpose import DWposeDetector
+from src.dwpose.wholebody import Wholebody
 
 from utils.general_utils import argmedian
 from utils.video_utils import frame_from_video
@@ -60,6 +62,25 @@ def download_anyone(checkpoints_folder):
             local_dir=local_dir,
         )
 
+def download_dwpose(checkpoints_folder):
+    local_dir = os.path.join(checkpoints_folder, "DWPose")
+    os.makedirs(local_dir, exist_ok=True)
+    for hub_file in [
+        "dw-ll_ucoco_384.onnx",
+        "yolox_l.onnx",
+    ]:
+        path = Path(hub_file)
+        saved_path = local_dir / path
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="yzd-v/DWPose",
+            subfolder=PurePosixPath(path.parent),
+            filename=PurePosixPath(path.name),
+            local_dir=local_dir,
+        )
+
 def get_frame_with_median_mask(video, frame_gen):
     threshold = 0.1*255
     mask = np.any(np.array(list(frame_gen)) > threshold, axis=-1)
@@ -72,6 +93,24 @@ def get_frame_with_median_mask(video, frame_gen):
 
     return frame_from_video(video, index)
 
+def get_kps_image(input_image_path, checkpoints_folder):
+    detector = CustomDWposeDetector(checkpoints_folder)
+    detector = detector.to("cuda")
+
+    input_image = cv2.imread(input_image_path)
+    input_image_pil = Image.fromarray(input_image).convert("RGB")
+
+    result_pil, score, _ = detector(input_image_pil)
+
+    return np.array(result_pil)
+
+class CustomDWposeDetector(DWposeDetector):
+    def __init__(self, checkpoints_folder):
+        self.checkpoints_folder = checkpoints_folder
+
+    def to(self, device):
+        self.pose_estimation = Wholebody(device, pathPrefix=Path(self.checkpoints_folder))
+        return self
 
 class ReposerBatchPredictor():
     def __init__(
