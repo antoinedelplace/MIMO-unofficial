@@ -76,7 +76,7 @@ class VaeBatchPredictor():
                 batch_gpu = batch.to("cuda")
                 latent = self.vae.encode(batch_gpu)
                 latent = 0.18215 * latent.latent_dist.mean
-                yield latent.cpu().numpy()
+                yield latent.cpu().float().numpy()
     
     def decode(self, nparray_data):
         dataset = NpzDataset(nparray_data)

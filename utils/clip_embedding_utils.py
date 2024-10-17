@@ -44,7 +44,8 @@ class CLIPBatchPredictor():
 
     def collate(self, batch):
         return self.clip_image_processor.preprocess(batch,
-            return_tensors="pt",
+            return_tensors=torch.bfloat16,
+            do_convert_rgb=True
         ).pixel_values
 
     def __call__(self, frame_gen):
@@ -61,4 +62,4 @@ class CLIPBatchPredictor():
             for batch in loader:
                 batch_gpu = batch.to("cuda")
                 embeds = self.vae(batch_gpu).image_embeds
-                yield embeds.cpu().numpy()
+                yield embeds.cpu().float().numpy()
