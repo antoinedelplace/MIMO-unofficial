@@ -1,6 +1,9 @@
 import sys
 sys.path.append(".")
 
+from configs.paths import RESIZED_FOLDER, DETECTRON2_FOLDER, DETECTRON2_REPO
+sys.path.append(DETECTRON2_REPO)
+
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from detectron2.utils.video_visualizer import VideoVisualizer
@@ -12,13 +15,8 @@ import numpy as np
 
 from utils.video_utils import frame_gen_from_video
 from utils.detectron2_utils import BatchPredictor
-from utils.general_utils import try_wrapper, set_memory_limit
+from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
-
-input_folder = "../../data/resized_data/"
-output_folder = "../../data/detectron2_data/"
-os.makedirs(output_folder, exist_ok=True)
-log_path = os.path.join(output_folder, "error_log.txt")
 
 def get_cfg_settings():
     cfg = get_cfg()
@@ -28,13 +26,7 @@ def get_cfg_settings():
 
     return cfg
 
-cfg = get_cfg_settings()
-batch_size = 32 #24
-workers = 16 #8
-predictor = BatchPredictor(cfg, batch_size, workers)
-set_memory_limit(60)
-
-def visualize(predictions, video, input_path):
+def visualize(predictions, video, input_path, output_folder):
     video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning
 
     basename = os.path.basename(input_path)
@@ -113,7 +105,7 @@ def save(outputs, output_path):
                         data_pred_classes=data_pred_classes,
                         data_pred_masks=data_pred_masks)
 
-def run_on_video(input_path):
+def run_on_video(input_path, predictor, output_folder):
     video = cv2.VideoCapture(input_path)
     
     frame_gen = frame_gen_from_video(video)
@@ -123,22 +115,39 @@ def run_on_video(input_path):
     basename = os.path.basename(input_path)
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
 
-    # visualize(outputs, video, input_path)
+    # visualize(outputs, video, input_path, output_folder)
     save(outputs, output_path)
 
     video.release()
 
-# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
-input_files = sorted(os.listdir(input_folder))
-output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
+def main(
+        input_folder=RESIZED_FOLDER,
+        output_folder=DETECTRON2_FOLDER,
+        batch_size=32,
+        workers=16,
+        cpu_memory_limit_gb=60
+        ):
+    os.makedirs(output_folder, exist_ok=True)
+    log_path = os.path.join(output_folder, "error_log.txt")
 
-for filename in tqdm.tqdm(input_files):
-    basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
-    if basename_wo_ext in output_files:
-        continue
+    cfg = get_cfg_settings()
+    predictor = BatchPredictor(cfg, batch_size, workers)
+    set_memory_limit(cpu_memory_limit_gb)
 
-    input_path = os.path.join(input_folder, filename)
-    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
+    # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
+    input_files = sorted(os.listdir(input_folder))
+    output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
 
+    for filename in tqdm.tqdm(input_files):
+        basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+        if basename_wo_ext in output_files:
+            continue
+
+        input_path = os.path.join(input_folder, filename)
+        try_wrapper(lambda: run_on_video(input_path, predictor, output_folder), filename, log_path)
+
+if __name__ == "__main__":
+    args = parse_args(main)
+    main(**vars(args))
 
 # python dataset_preprocessing/human_detection_detectron2.py

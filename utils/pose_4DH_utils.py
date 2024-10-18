@@ -1,6 +1,9 @@
 import sys
-sys.path.append("../4D-Humans")
-sys.path.append("../PHALP")
+sys.path.append(".")
+
+from configs.paths import HUMANS_4D_REPO, PHALP_REPO
+sys.path.append(HUMANS_4D_REPO)
+sys.path.append(PHALP_REPO)
 
 import os, cv2
 import torch

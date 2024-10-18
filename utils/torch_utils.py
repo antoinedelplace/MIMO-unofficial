@@ -1,3 +1,6 @@
+import sys
+sys.path.append(".")
+
 from numpy import ndarray
 from torch.utils.data import Dataset
 import numpy as np

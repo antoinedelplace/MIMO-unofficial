@@ -1,3 +1,6 @@
+import sys
+sys.path.append(".")
+
 import torch, os
 from torch.utils.data import DataLoader
 import numpy as np
@@ -10,13 +13,14 @@ from huggingface_hub import hf_hub_download
 
 from utils.torch_utils import VideoDataset, NpzDataset
 
+from configs.paths import VAE_FOLDER
 
-def download_vae(checkpoints_folder):
-    local_dir = os.path.join(checkpoints_folder, "sd-vae-ft-mse")
-    os.makedirs(local_dir, exist_ok=True)
+
+def download_vae():
+    os.makedirs(VAE_FOLDER, exist_ok=True)
     for hub_file in ["diffusion_pytorch_model.safetensors", "config.json"]:
         path = Path(hub_file)
-        saved_path = local_dir / path
+        saved_path = VAE_FOLDER / path
         if os.path.exists(saved_path):
             continue
 
@@ -24,7 +28,7 @@ def download_vae(checkpoints_folder):
             repo_id="stabilityai/sd-vae-ft-mse",
             subfolder=PurePosixPath(path.parent),
             filename=PurePosixPath(path.name),
-            local_dir=local_dir,
+            local_dir=VAE_FOLDER,
         )
 
 class VaeBatchPredictor():
@@ -32,10 +36,9 @@ class VaeBatchPredictor():
         self, 
         batch_size: int, 
         workers: int,
-        checkpoints_folder
     ):
         self.vae = AutoencoderKL.from_pretrained(
-            os.path.join(checkpoints_folder, "sd-vae-ft-mse"), 
+            VAE_FOLDER, 
             torch_dtype=torch.bfloat16,
             use_safetensors=True
         ).to("cuda")

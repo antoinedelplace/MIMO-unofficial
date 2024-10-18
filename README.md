@@ -23,6 +23,7 @@ pip install -r requirements.txt
 ```
 
 ### Folder architecture
+See `configs/paths.py`
 ```bash
 ├── code
 │   ├── MIMO-unofficial

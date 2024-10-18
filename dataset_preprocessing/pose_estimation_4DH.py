@@ -7,21 +7,12 @@ import numpy as np
 import pytorch3d.transforms as pt3d
 
 from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper, set_memory_limit
+from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 from utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
 from utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Openpose_25_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
 
-input_folder = "../../data/human_data/"
-output_folder = "../../data/poses_4DH_data/"
-os.makedirs(output_folder, exist_ok=True)
-log_path = os.path.join(output_folder, "error_log.txt")
+from configs.paths import HUMAN_FOLDER, POSES_4DH_FOLDER
 
-batch_size = 12
-workers = 8
-input_size = 768
-set_memory_limit(60)
-
-cfg = Human4DConfig()
 
 def make_iterable(obj):
     def smpl_iter(self):
@@ -30,19 +21,7 @@ def make_iterable(obj):
     obj.__class__.__iter__ = smpl_iter
     return obj
 
-cfg.SMPL = make_iterable(cfg.SMPL)
-cfg.render.enable = False
-cfg.video.extract_video = False
-cfg.video.source = None
-cfg.video.start_frame=None
-cfg.video.end_frame=None
-cfg.video.start_time=None
-cfg.video.end_time=None
-cfg.post_process.phalp_pkl_path = None
-
-phalp_tracker = HMR2_4dhuman(cfg)
-
-def visualize_poses(data_poses, input_path):
+def visualize_poses(data_poses, input_path, output_folder):
     # TODO
     skeleton = Skeleton("skeleton")
     skeleton.set_local_position(torch.Tensor([0, 1, 0]))
@@ -65,9 +44,9 @@ def visualize_poses(data_poses, input_path):
     print("skeleton.get_bone2idx()", [(k.name, v) for k, v in skeleton.get_bone2idx().items()])
 
     basename = os.path.basename(input_path)
-    visualize_joints_3d(points, f"poses_{basename}")
+    visualize_joints_3d(points, f"poses_{basename}", output_folder)
 
-def visualize_joints_3d(data_joints_3d, input_path):
+def visualize_joints_3d(data_joints_3d, input_path, output_folder):
     # TODO
     chains = get_chains_from_bones_hierarchy(SMPL_hierarchy)
 
@@ -79,7 +58,7 @@ def visualize_joints_3d(data_joints_3d, input_path):
                                show=False,
                                save_path=os.path.join(output_folder, f"joints_3d_{basename}"))
 
-def visualize_joints_2d(data_joints_2d, input_path, chains=None):
+def visualize_joints_2d(data_joints_2d, input_path, output_folder, chains=None):
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -125,7 +104,7 @@ def visualize_joints_2d(data_joints_2d, input_path, chains=None):
     output_file.release()
     video.release()
     
-def run_on_video(input_path):
+def run_on_video(input_path, phalp_tracker, output_folder):
     phalp_tracker.io_manager.input_path = input_path
     outputs, _ = phalp_tracker.track()
 
@@ -165,18 +144,46 @@ def run_on_video(input_path):
     # visualize_joints_3d(data_joints_3d, input_path)
     # visualize_poses(data_poses, input_path)
 
-# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
-input_files = sorted(os.listdir(input_folder))
-output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
+def main(
+        input_folder=HUMAN_FOLDER,
+        output_folder=POSES_4DH_FOLDER,
+        cpu_memory_limit_gb=60
+        ):
+    os.makedirs(output_folder, exist_ok=True)
+    log_path = os.path.join(output_folder, "error_log.txt")
 
-for filename in tqdm.tqdm(input_files):
-    basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
-    if basename_wo_ext in output_files:
-        continue
+    set_memory_limit(cpu_memory_limit_gb)
 
-    input_path = os.path.join(input_folder, filename)
-    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
+    cfg = Human4DConfig()
 
+    cfg.SMPL = make_iterable(cfg.SMPL)
+    cfg.render.enable = False
+    cfg.video.extract_video = False
+    cfg.video.source = None
+    cfg.video.start_frame=None
+    cfg.video.end_frame=None
+    cfg.video.start_time=None
+    cfg.video.end_time=None
+    cfg.post_process.phalp_pkl_path = None
+
+    phalp_tracker = HMR2_4dhuman(cfg)
+
+    # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
+    input_files = sorted(os.listdir(input_folder))
+    output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
+
+    for filename in tqdm.tqdm(input_files):
+        basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+        if basename_wo_ext in output_files:
+            continue
+
+        input_path = os.path.join(input_folder, filename)
+        try_wrapper(lambda: run_on_video(input_path, phalp_tracker, output_folder), filename, log_path)
+
+
+if __name__ == "__main__":
+    args = parse_args(main)
+    main(**vars(args))
 
 # python dataset_preprocessing/pose_estimation_4DH.py
 

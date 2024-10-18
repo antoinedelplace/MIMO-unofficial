@@ -1,6 +1,8 @@
 import sys
 sys.path.append(".")
-sys.path.append("../ProPainter")
+
+from configs.paths import PROPAINTER_REPO, CHECKPOINTS_FOLDER
+sys.path.append(PROPAINTER_REPO)
 
 import torch
 import os, tqdm
@@ -23,12 +25,11 @@ class BatchPredictor():
         self, 
         batch_size: int,
         workers: int,
-        checkpoint_folder="../../checkpoints/",
         use_half=True
     ):
         self.batch_size = batch_size
         self.workers = workers
-        self.checkpoint_folder = checkpoint_folder
+        self.checkpoint_folder = CHECKPOINTS_FOLDER
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.use_half = use_half
 

@@ -1,29 +1,19 @@
 import sys
 sys.path.append(".")
-sys.path.append("../nvdiffrast")
+
+from configs.paths import NVDIFFRAST_REPO, POSES_4DH_FOLDER, RASTERIZED_2D_JOINTS_FOLDER
+sys.path.append(NVDIFFRAST_REPO)
 
 import os, cv2, torch, tqdm
 import numpy as np
 
 import nvdiffrast.torch as dr
 
-from utils.general_utils import try_wrapper, set_memory_limit
+from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 from utils.rasterizer_utils import triangles, vertex_attrs
 
-input_folder = "../../data/poses_4DH_data/"
-output_folder = "../../data/rasterized_2D_joints_data/"
-os.makedirs(output_folder, exist_ok=True)
-log_path = os.path.join(output_folder, "error_log.txt")
 
-width = 768
-height = 768
-fps = 24.0
-batch_size = 12
-workers = 8
-input_size = 768
-set_memory_limit(60)
-
-def save(feature_map, basename):
+def save(feature_map, basename, fps, height, width, output_folder):
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename).replace(".npz", ".mp4"),
         fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
@@ -37,7 +27,7 @@ def save(feature_map, basename):
 
     output_file.release()
     
-def run_on_video(input_path):
+def run_on_video(input_path, fps, height, width, output_folder):
     basename = os.path.basename(input_path)
 
     rast_ctx = dr.RasterizeCudaContext()
@@ -71,20 +61,36 @@ def run_on_video(input_path):
     # Resulting interpolated 2D feature map (n_batch, height, width)
     feature_map = interpolated_features.squeeze().cpu().numpy()
 
-    save(feature_map, basename)
+    save(feature_map, basename, fps, height, width, output_folder)
+
+def main(
+        input_folder=POSES_4DH_FOLDER,
+        output_folder=RASTERIZED_2D_JOINTS_FOLDER,
+        width = 768,
+        height = 768,
+        fps = 24.0,
+        cpu_memory_limit_gb=60
+        ):
+    os.makedirs(output_folder, exist_ok=True)
+    log_path = os.path.join(output_folder, "error_log.txt")
+
+    set_memory_limit(cpu_memory_limit_gb)
+
+    # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.npz"]
+    input_files = sorted(os.listdir(input_folder))
+    output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
+
+    for filename in tqdm.tqdm(input_files):
+        basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+        if basename_wo_ext in output_files:
+            continue
+
+        input_path = os.path.join(input_folder, filename)
+        try_wrapper(lambda: run_on_video(input_path, fps, height, width, output_folder), filename, log_path)
 
 
-# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.npz"]
-input_files = sorted(os.listdir(input_folder))
-output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
-
-for filename in tqdm.tqdm(input_files):
-    basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
-    if basename_wo_ext in output_files:
-        continue
-
-    input_path = os.path.join(input_folder, filename)
-    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
-
+if __name__ == "__main__":
+    args = parse_args(main)
+    main(**vars(args))
 
 # python dataset_preprocessing/rasterizer_2d_joints.py

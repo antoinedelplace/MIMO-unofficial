@@ -1,7 +1,9 @@
 import sys
 sys.path.append(".")
-sys.path.append("../sam2")
-sys.path.append("../detectron2")
+
+from configs.paths import SAM2_REPO, DETECTRON2_REPO, RESIZED_FOLDER, DEPTH_FOLDER, DETECTRON2_FOLDER, HUMAN_FOLDER, SCENE_FOLDER, OCCLUSION_FOLDER, CHECKPOINTS_FOLDER
+sys.path.append(SAM2_REPO)
+sys.path.append(DETECTRON2_REPO)
 
 import os, cv2, torch, tqdm
 import numpy as np
@@ -14,26 +16,10 @@ from detectron2.structures import Instances
 from sam2.build_sam import build_sam2_video_predictor
 
 from utils.video_utils import frame_gen_from_video
-from utils.general_utils import iou, set_memory_limit, try_wrapper
+from utils.general_utils import iou, set_memory_limit, try_wrapper, parse_args
 
-input_folder = "../../data/resized_data/"
-depth_input_folder = "../../data/depth_data/"
-detectron2_input_folder = "../../data/detectron2_data/"
-human_output_folder = "../../data/human_data/"
-scene_output_folder = "../../data/scene_data/"
-occlusion_output_folder = "../../data/occlusion_data/"
-os.makedirs(human_output_folder, exist_ok=True)
-os.makedirs(scene_output_folder, exist_ok=True)
-os.makedirs(occlusion_output_folder, exist_ok=True)
-log_path = os.path.join(human_output_folder, "error_log.txt")
 
-score_threshold = 0.9
-set_memory_limit(60)
-checkpoint = "../../checkpoints/sam2.1_hiera_large.pt"
-model_cfg = "../sam2/configs/sam2.1/sam2.1_hiera_l.yaml"
-predictor = build_sam2_video_predictor(model_cfg, checkpoint)
-
-def get_index_first_frame_with_character(detectron2_data):
+def get_index_first_frame_with_character(detectron2_data, score_threshold):
     zero = np.where((detectron2_data["data_pred_classes"] == 0) & (detectron2_data["data_scores"] > score_threshold))
 
     # Check if zero[0] is empty, meaning no frames matched the condition
@@ -42,7 +28,7 @@ def get_index_first_frame_with_character(detectron2_data):
     
     return detectron2_data["data_frame_index"][zero[0][0]]
 
-def get_global_index_biggest_human_in_frame(detectron2_data, i_frame):
+def get_global_index_biggest_human_in_frame(detectron2_data, i_frame, score_threshold):
     indexes_humans_at_input_frame = np.where((detectron2_data["data_pred_classes"] == 0) 
                                              & (detectron2_data["data_frame_index"] == i_frame) 
                                              & (detectron2_data["data_scores"] > score_threshold))
@@ -50,7 +36,7 @@ def get_global_index_biggest_human_in_frame(detectron2_data, i_frame):
     i_sub = np.argmax(detectron2_data["data_pred_masks"][indexes_humans_at_input_frame].sum(axis=(1, 2)))
     return indexes_humans_at_input_frame[0][i_sub]
 
-def get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data):
+def get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data, score_threshold):
     global_indexes = []
 
     depth = np.array(list(frame_gen_from_video(depth_video)))[:, :, :, 0]
@@ -85,7 +71,7 @@ def get_global_indexes_filtered_already_in_mask(global_indexes, sam_output, dete
     new_global_indexes = [global_indexes[i] for i in range(len(global_indexes)) if i not in indexes_to_remove]
     return new_global_indexes
 
-def visualize(sam_output, video, input_path):
+def visualize(sam_output, video, input_path, human_output_folder):
     video.set(cv2.CAP_PROP_POS_FRAMES, 0) # Set video at the beginning
 
     basename = os.path.basename(input_path)
@@ -144,7 +130,16 @@ def visualize(sam_output, video, input_path):
 
     video2.release()
 
-def save(min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask, video, input_path):
+def save(
+        min_frame_idx, 
+        max_frame_idx, 
+        instance_sam_output, 
+        foreground_mask, 
+        video, 
+        input_path, 
+        human_output_folder, 
+        scene_output_folder, 
+        occlusion_output_folder):
     num_frames_output = max_frame_idx-min_frame_idx+1
     video.set(cv2.CAP_PROP_POS_FRAMES, min_frame_idx)
 
@@ -197,7 +192,14 @@ def save(min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask, vid
     output_scene_file.release()
     output_occlusion_file.release()
 
-def run_on_video(input_path):
+def run_on_video(input_path, 
+                 depth_input_folder, 
+                 detectron2_input_folder, 
+                 predictor, 
+                 score_threshold,
+                 human_output_folder, 
+                 scene_output_folder, 
+                 occlusion_output_folder):
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -208,9 +210,9 @@ def run_on_video(input_path):
     detectron2_data = dict(np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz")))
     depth_video = cv2.VideoCapture(os.path.join(depth_input_folder, basename))
 
-    i_first_frame = get_index_first_frame_with_character(detectron2_data)
+    i_first_frame = get_index_first_frame_with_character(detectron2_data, score_threshold)
     print("i_first_frame", i_first_frame)
-    i_biggest_human = get_global_index_biggest_human_in_frame(detectron2_data, i_first_frame)
+    i_biggest_human = get_global_index_biggest_human_in_frame(detectron2_data, i_first_frame, score_threshold)
     print("i_biggest_human", i_biggest_human)
 
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
@@ -236,9 +238,9 @@ def run_on_video(input_path):
                                         pred_classes=torch.tensor(out_obj_ids, dtype=torch.int8), 
                                         pred_masks=(out_mask_logits > 0)[0].to(torch.bool).cpu())])
 
-        #visualize(sam_output, video, input_path)
+        #visualize(sam_output, video, input_path, human_output_folder)
 
-        global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data)
+        global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data, score_threshold)
         print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
 
         foreground_mask = torch.zeros((num_frames, width, height), dtype=bool)
@@ -253,30 +255,74 @@ def run_on_video(input_path):
                                             box=detectron2_data["data_pred_boxes"][i_global_indexes])
 
             sam_output = list(predictor.propagate_in_video(state, start_frame_idx=0))
-            # visualize(sam_output, video, f"{i_global_indexes}_{basename}")
+            # visualize(sam_output, video, f"{i_global_indexes}_{basename}", human_output_folder)
 
             for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
                 foreground_mask[out_frame_idx] += (out_mask_logits > 0).squeeze().to(torch.bool).cpu()
 
-            global_indexes_foreground_objects = get_global_indexes_filtered_already_in_mask(global_indexes_foreground_objects, sam_output, detectron2_data)
+            global_indexes_foreground_objects = get_global_indexes_filtered_already_in_mask(
+                global_indexes_foreground_objects, 
+                sam_output, 
+                detectron2_data
+            )
             print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
 
-    save(min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask.numpy(), video, input_path)
+    save(min_frame_idx, 
+         max_frame_idx, 
+         instance_sam_output, 
+         foreground_mask.numpy(), 
+         video, 
+         input_path, 
+         human_output_folder, 
+         scene_output_folder, 
+         occlusion_output_folder)
 
     depth_video.release()
     video.release()
 
-# input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
-input_files = sorted(os.listdir(input_folder))
-output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(human_output_folder)])
+def main(
+        input_folder=RESIZED_FOLDER,
+        depth_input_folder = DEPTH_FOLDER,
+        detectron2_input_folder = DETECTRON2_FOLDER,
+        human_output_folder = HUMAN_FOLDER,
+        scene_output_folder = SCENE_FOLDER,
+        occlusion_output_folder = OCCLUSION_FOLDER,
+        score_threshold = 0.9,
+        cpu_memory_limit_gb=60
+        ):
+    os.makedirs(human_output_folder, exist_ok=True)
+    os.makedirs(scene_output_folder, exist_ok=True)
+    os.makedirs(occlusion_output_folder, exist_ok=True)
+    log_path = os.path.join(human_output_folder, "error_log.txt")
 
-for filename in tqdm.tqdm(input_files):
-    basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
-    if basename_wo_ext in output_files:
-        continue
+    set_memory_limit(cpu_memory_limit_gb)
+    checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
+    model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+    predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
-    input_path = os.path.join(input_folder, filename)
-    try_wrapper(lambda: run_on_video(input_path), filename, log_path)
+    # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
+    input_files = sorted(os.listdir(input_folder))
+    output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(human_output_folder)])
 
+    for filename in tqdm.tqdm(input_files):
+        basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+        if basename_wo_ext in output_files:
+            continue
+
+        input_path = os.path.join(input_folder, filename)
+        try_wrapper(lambda: run_on_video(
+            input_path, 
+            depth_input_folder, 
+            detectron2_input_folder, 
+            predictor, 
+            score_threshold,
+            human_output_folder, 
+            scene_output_folder, 
+            occlusion_output_folder), filename, log_path)
+
+
+if __name__ == "__main__":
+    args = parse_args(main)
+    main(**vars(args))
 
 # python dataset_preprocessing/video_tracking_sam2.py

@@ -19,7 +19,7 @@ def time_it(func):
 
 def try_wrapper(function, filename, log_path):
     try:
-        function()
+        return function()
     except Exception as e:
         with open(log_path, 'a') as log_file:
             log_file.write(f"{filename}: {str(e)}\n")

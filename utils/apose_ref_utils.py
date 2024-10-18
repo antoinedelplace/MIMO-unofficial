@@ -1,6 +1,8 @@
 import sys
 sys.path.append(".")
-sys.path.append("../AnimateAnyone")
+
+from configs.paths import BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, DWPOSE_FOLDER, CHECKPOINTS_FOLDER, ANIMATE_ANYONE_REPO
+sys.path.append(ANIMATE_ANYONE_REPO)
 
 import os, cv2
 from pathlib import Path, PurePosixPath
@@ -26,24 +28,22 @@ from utils.general_utils import argmedian
 from utils.video_utils import frame_from_video
 from utils.torch_utils import VideoDataset
 
-def download_base_model(checkpoints_folder):
-    local_dir = os.path.join(checkpoints_folder, "stable-diffusion-v1-5")
-    os.makedirs(local_dir, exist_ok=True)
+def download_base_model():
+    os.makedirs(BASE_MODEL_FOLDER, exist_ok=True)
     for hub_file in ["unet/diffusion_pytorch_model.safetensors", "unet/config.json"]:
         path = Path(hub_file)
-        saved_path = local_dir / path
+        saved_path = BASE_MODEL_FOLDER / path
         if os.path.exists(saved_path):
             continue
         hf_hub_download(
             repo_id="runwayml/stable-diffusion-v1-5",
             subfolder=PurePosixPath(path.parent),
             filename=PurePosixPath(path.name),
-            local_dir=local_dir,
+            local_dir=BASE_MODEL_FOLDER,
         )
 
-def download_anyone(checkpoints_folder):
-    local_dir = os.path.join(checkpoints_folder, "AnimateAnyone")
-    os.makedirs(local_dir, exist_ok=True)
+def download_anyone():
+    os.makedirs(ANIMATE_ANYONE_FOLDER, exist_ok=True)
     for hub_file in [
         "denoising_unet.pth",
         "motion_module.pth",
@@ -51,7 +51,7 @@ def download_anyone(checkpoints_folder):
         "reference_unet.pth",
     ]:
         path = Path(hub_file)
-        saved_path = local_dir / path
+        saved_path = ANIMATE_ANYONE_FOLDER / path
         if os.path.exists(saved_path):
             continue
 
@@ -59,18 +59,17 @@ def download_anyone(checkpoints_folder):
             repo_id="novita-ai/AnimateAnyone",
             subfolder=PurePosixPath(path.parent),
             filename=PurePosixPath(path.name),
-            local_dir=local_dir,
+            local_dir=ANIMATE_ANYONE_FOLDER,
         )
 
-def download_dwpose(checkpoints_folder):
-    local_dir = os.path.join(checkpoints_folder, "DWPose")
-    os.makedirs(local_dir, exist_ok=True)
+def download_dwpose():
+    os.makedirs(DWPOSE_FOLDER, exist_ok=True)
     for hub_file in [
         "dw-ll_ucoco_384.onnx",
         "yolox_l.onnx",
     ]:
         path = Path(hub_file)
-        saved_path = local_dir / path
+        saved_path = DWPOSE_FOLDER / path
         if os.path.exists(saved_path):
             continue
 
@@ -78,7 +77,7 @@ def download_dwpose(checkpoints_folder):
             repo_id="yzd-v/DWPose",
             subfolder=PurePosixPath(path.parent),
             filename=PurePosixPath(path.name),
-            local_dir=local_dir,
+            local_dir=DWPOSE_FOLDER,
         )
 
 def get_frame_with_median_mask(video, frame_gen):
@@ -89,11 +88,11 @@ def get_frame_with_median_mask(video, frame_gen):
 
     return frame_from_video(video, index)
 
-def get_frame_closest_pose(video, frame_gen, ref_points_2d, checkpoints_folder):
+def get_frame_closest_pose(video, frame_gen, ref_points_2d):
     i_chosen = 0
     distance = np.infty
 
-    detector = CustomDWposeDetector(checkpoints_folder)
+    detector = CustomDWposeDetector()
     detector = detector.to("cuda")
 
     ref_points_2d_norm = (ref_points_2d['bodies']['candidate']-np.mean(ref_points_2d['bodies']['candidate']))/np.std(ref_points_2d['bodies']['candidate'])
@@ -110,8 +109,8 @@ def get_frame_closest_pose(video, frame_gen, ref_points_2d, checkpoints_folder):
     
     return frame_from_video(video, i_chosen)
 
-def get_kps_image(input_image_path, checkpoints_folder):
-    detector = CustomDWposeDetector(checkpoints_folder)
+def get_kps_image(input_image_path):
+    detector = CustomDWposeDetector()
     detector = detector.to("cuda")
 
     input_image = cv2.imread(input_image_path)
@@ -122,11 +121,8 @@ def get_kps_image(input_image_path, checkpoints_folder):
     return np.array(result_pil), points_2d
 
 class CustomDWposeDetector(DWposeDetector):
-    def __init__(self, checkpoints_folder):
-        self.checkpoints_folder = checkpoints_folder
-
     def to(self, device):
-        self.pose_estimation = Wholebody(device, pathPrefix=Path(self.checkpoints_folder))
+        self.pose_estimation = Wholebody(device, pathPrefix=Path(CHECKPOINTS_FOLDER))
         return self
 
 class ReposerBatchPredictor():
@@ -134,7 +130,6 @@ class ReposerBatchPredictor():
         self, 
         batch_size: int, 
         workers: int,
-        checkpoints_folder,
         clip,
         vae
     ):
@@ -144,25 +139,25 @@ class ReposerBatchPredictor():
             dtype=torch.float16, device="cuda"
         )
         pose_guider.load_state_dict(
-            torch.load(os.path.join(checkpoints_folder, "AnimateAnyone", "pose_guider.pth"), map_location="cpu", weights_only=True),
+            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
         
         reference_unet = UNet2DConditionModel.from_pretrained(
-            os.path.join(checkpoints_folder, "stable-diffusion-v1-5", "unet"),
+            os.path.join(BASE_MODEL_FOLDER, "unet"),
             torch_dtype=torch.float16,
             use_safetensors=True
         ).to("cuda")
         reference_unet.load_state_dict(
-            torch.load(os.path.join(checkpoints_folder, "AnimateAnyone", "reference_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
 
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
-            os.path.join(checkpoints_folder, "stable-diffusion-v1-5", "unet"),
-            os.path.join(checkpoints_folder, "AnimateAnyone", "motion_module.pth"),
+            os.path.join(BASE_MODEL_FOLDER, "unet"),
+            os.path.join(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
             unet_additional_kwargs=infer_config.unet_additional_kwargs,
         ).to(torch.float16).to("cuda")
         denoising_unet.load_state_dict(
-            torch.load(os.path.join(checkpoints_folder, "AnimateAnyone", "denoising_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
 

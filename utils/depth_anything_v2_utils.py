@@ -1,6 +1,8 @@
 import sys
 sys.path.append(".")
-sys.path.append("../Depth-Anything-V2")
+
+from configs.paths import DEPTH_ANYTHING_REPO
+sys.path.append(DEPTH_ANYTHING_REPO)
 
 import torch, cv2
 
@@ -35,8 +37,8 @@ class BatchPredictor(DepthAnythingV2):
 
             image = cv2.resize(image, ((self.width // 14) * 14, (self.height // 14) * 14), interpolation=cv2.INTER_LINEAR)
             image = (image - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
-            image = image.astype("float32").transpose(2, 0, 1)
-            image = torch.as_tensor(image)
+            image = image.transpose(2, 0, 1)
+            image = torch.as_tensor(image, dtype=torch.bfloat16)
             data.append(image)
         return torch.stack(data, dim=0)
 
@@ -55,4 +57,4 @@ class BatchPredictor(DepthAnythingV2):
                 batch_gpu = batch.to("cuda")
                 depth = self.forward(batch_gpu)
                 depth = F.interpolate(depth[:, None], (self.height, self.width), mode="bilinear", align_corners=True)[:, 0]
-                yield depth.cpu().numpy()
+                yield depth.cpu().float().numpy()

@@ -1,3 +1,9 @@
+import sys
+sys.path.append(".")
+
+from configs.paths import DETECTRON2_REPO
+sys.path.append(DETECTRON2_REPO)
+
 from typing import Iterable, List, NamedTuple
 
 import detectron2.data.transforms as T
