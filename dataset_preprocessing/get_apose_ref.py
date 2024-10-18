@@ -22,7 +22,7 @@ download_image_encoder(checkpoints_folder)
 download_vae(checkpoints_folder)
 download_base_model(checkpoints_folder)
 download_anyone(checkpoints_folder)
-# download_dwpose(checkpoints_folder)
+download_dwpose(checkpoints_folder)
 
 batch_size = 24
 workers = 8
@@ -31,6 +31,10 @@ set_memory_limit(60)
 vae = VaeBatchPredictor(batch_size, workers, checkpoints_folder)
 clip = CLIPBatchPredictor(batch_size, workers, checkpoints_folder)
 reposer = ReposerBatchPredictor(batch_size, workers, checkpoints_folder, clip, vae)
+
+a_pose_kps, ref_points_2d = get_kps_image(a_pose_raw_path, checkpoints_folder)
+# print("np.shape(a_pose_kps)", np.shape(a_pose_kps))
+# print("np.shape(ref_points_2d['bodies']['candidate'])", np.shape(ref_points_2d['bodies']['candidate']))
 
 def run_on_video(input_path):
     video = cv2.VideoCapture(input_path)
@@ -48,24 +52,17 @@ def run_on_video(input_path):
 
     frame_gen = frame_gen_from_video(video)
 
-    a_pose_kps, ref_points_2d = get_kps_image(a_pose_raw_path, checkpoints_folder)
-    print("np.shape(a_pose_kps)", np.shape(a_pose_kps))
-    print("np.shape(ref_points_2d['bodies']['candidate'])", np.shape(ref_points_2d['bodies']['candidate']))
-
     input_image = get_frame_closest_pose(video, frame_gen, ref_points_2d, checkpoints_folder)
-    print("np.shape(input_image)", np.shape(input_image))
-    cv2.imwrite("../../data/ref_pose.png", input_image)
+    # print("np.shape(input_image)", np.shape(input_image))
+    # cv2.imwrite("../../data/ref_pose.png", input_image)
 
     output_image = np.concatenate(list(reposer(input_image, [a_pose_kps]*24))) # Need 24 frames to get relevant outputs
-    print("np.shape(output_image)", np.shape(output_image))
+    # print("np.shape(output_image)", np.shape(output_image))
 
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".png")
     cv2.imwrite(output_path, output_image[0])
 
     video.release()
-
-run_on_video("../../data/human_data/03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4")
-print(1/0)
 
 # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
 input_files = sorted(os.listdir(input_folder))
