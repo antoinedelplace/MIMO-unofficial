@@ -85,24 +85,41 @@ def get_frame_with_median_mask(video, frame_gen):
     threshold = 0.1*255
     mask = np.any(np.array(list(frame_gen)) > threshold, axis=-1)
     area_mask = np.sum(mask, axis=(1, 2))
-    # print("np.max(area_mask)", np.max(area_mask))
-    # print("np.median(area_mask)", np.median(area_mask))
-    # print("np.min(area_mask)", np.min(area_mask))
     index = argmedian(area_mask)
-    # print("index", index)
 
     return frame_from_video(video, index)
+
+def get_frame_closest_pose(video, frame_gen, ref_points_2d, checkpoints_folder):
+    i_chosen = 0
+    distance = np.infty
+
+    detector = CustomDWposeDetector(checkpoints_folder)
+    detector = detector.to("cuda")
+
+    ref_points_2d_norm = (ref_points_2d['bodies']['candidate']-np.mean(ref_points_2d['bodies']['candidate']))/np.std(ref_points_2d['bodies']['candidate'])
+
+    for i_frame, image in enumerate(frame_gen):
+        input_image_pil = Image.fromarray(image[:, :, ::-1])
+        _, _, points_2d = detector(input_image_pil)
+
+        points_2d_norm = (points_2d['bodies']['candidate']-np.mean(points_2d['bodies']['candidate']))/np.std(points_2d['bodies']['candidate'])
+        new_distance = np.sum(np.abs(points_2d_norm-ref_points_2d_norm))
+        if new_distance < distance:
+            distance = new_distance
+            i_chosen = i_frame
+    
+    return frame_from_video(video, i_chosen)
 
 def get_kps_image(input_image_path, checkpoints_folder):
     detector = CustomDWposeDetector(checkpoints_folder)
     detector = detector.to("cuda")
 
     input_image = cv2.imread(input_image_path)
-    input_image_pil = Image.fromarray(input_image).convert("RGB")
+    input_image_pil = Image.fromarray(input_image[:, :, ::-1])
 
-    result_pil, score, _ = detector(input_image_pil)
+    result_pil, score, points_2d = detector(input_image_pil)
 
-    return np.array(result_pil)
+    return np.array(result_pil), points_2d
 
 class CustomDWposeDetector(DWposeDetector):
     def __init__(self, checkpoints_folder):
@@ -167,12 +184,12 @@ class ReposerBatchPredictor():
     def collate(self, batch):
         data_pose_image_pil = []
         for pose_frame in batch:
-            data_pose_image_pil.append(Image.fromarray(pose_frame).convert("RGB"))
+            data_pose_image_pil.append(Image.fromarray(pose_frame[:, :, ::-1]))
         return data_pose_image_pil
 
     def __call__(self, reference_image, pose_frame_gen, seed=12345):
-        cfg = 3.5
-        steps = 30
+        cfg = 3.5 #5
+        steps = 30 #60
 
         dataset = VideoDataset(pose_frame_gen)
         loader = DataLoader(
@@ -184,7 +201,7 @@ class ReposerBatchPredictor():
             pin_memory=True
         )
 
-        reference_image_pil = Image.fromarray(reference_image).convert("RGB")
+        reference_image_pil = Image.fromarray(reference_image[:, :, ::-1])
 
         with torch.no_grad():
             for batch_pose_images_pil in loader:
@@ -199,9 +216,9 @@ class ReposerBatchPredictor():
                     generator=torch.manual_seed(seed),
                 ).videos
 
-                video = video.squeeze(2)
+                video = video.squeeze(0)
                 video = (video * 255).round().clamp(0, 255).to(torch.uint8)
-                video = video.permute(0, 2, 3, 1)
+                video = video.permute(1, 2, 3, 0)
                 video = video[:, :, :, [2, 1, 0]] #RGB 2 BGR
 
                 yield video.cpu().numpy()

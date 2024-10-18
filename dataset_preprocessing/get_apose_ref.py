@@ -6,7 +6,7 @@ import numpy as np
 
 from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper, set_memory_limit
-from utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, get_frame_with_median_mask, ReposerBatchPredictor, get_kps_image
+from utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, get_frame_closest_pose, ReposerBatchPredictor, get_kps_image
 from utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
@@ -15,8 +15,7 @@ output_folder = "../../data/apose_ref_data/"
 os.makedirs(output_folder, exist_ok=True)
 log_path = os.path.join(output_folder, "error_log.txt")
 
-# a_pose_raw_path = "../../data/a_pose_raw.png"
-a_pose_kps_path = "../../data/a_pose_kps.png"
+a_pose_raw_path = "../../data/a_pose_raw.png"
 
 checkpoints_folder = "../../checkpoints"
 download_image_encoder(checkpoints_folder)
@@ -25,7 +24,7 @@ download_base_model(checkpoints_folder)
 download_anyone(checkpoints_folder)
 # download_dwpose(checkpoints_folder)
 
-batch_size = 16
+batch_size = 24
 workers = 8
 set_memory_limit(60)
 
@@ -49,20 +48,19 @@ def run_on_video(input_path):
 
     frame_gen = frame_gen_from_video(video)
 
-    input_image = get_frame_with_median_mask(video, frame_gen)
+    a_pose_kps, ref_points_2d = get_kps_image(a_pose_raw_path, checkpoints_folder)
+    print("np.shape(a_pose_kps)", np.shape(a_pose_kps))
+    print("np.shape(ref_points_2d['bodies']['candidate'])", np.shape(ref_points_2d['bodies']['candidate']))
+
+    input_image = get_frame_closest_pose(video, frame_gen, ref_points_2d, checkpoints_folder)
     print("np.shape(input_image)", np.shape(input_image))
+    cv2.imwrite("../../data/ref_pose.png", input_image)
 
-    # a_pose_kps = get_kps_image(a_pose_raw_path, checkpoints_folder)
-    # cv2.imwrite(a_pose_kps_path, a_pose_kps)
-
-    a_pose_kps = cv2.imread(a_pose_kps_path)
-    print("np.shape(a_pose_image)", np.shape(a_pose_kps))
-
-    output_image = list(reposer(input_image, [a_pose_kps]))[0][0]
+    output_image = np.concatenate(list(reposer(input_image, [a_pose_kps]*24))) # Need 24 frames to get relevant outputs
     print("np.shape(output_image)", np.shape(output_image))
 
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".png")
-    cv2.imwrite(output_path, output_image)
+    cv2.imwrite(output_path, output_image[0])
 
     video.release()
 
