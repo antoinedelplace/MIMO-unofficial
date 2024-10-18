@@ -10,20 +10,21 @@ from huggingface_hub import hf_hub_download
 
 from utils.torch_utils import VideoDataset
 
+from configs.paths import IMAGE_ENCODER_FOLDER
 
-def download_image_encoder(checkpoints_folder):
-    local_dir = os.path.join(checkpoints_folder, "sd-image-variations-diffusers")
-    os.makedirs(local_dir, exist_ok=True)
+
+def download_image_encoder():
+    os.makedirs(IMAGE_ENCODER_FOLDER, exist_ok=True)
     for hub_file in ["image_encoder/config.json", "image_encoder/pytorch_model.bin"]:
         path = Path(hub_file)
-        saved_path = local_dir / path
+        saved_path = IMAGE_ENCODER_FOLDER / path
         if os.path.exists(saved_path):
             continue
         hf_hub_download(
             repo_id="lambdalabs/sd-image-variations-diffusers",
             subfolder=PurePosixPath(path.parent),
             filename=PurePosixPath(path.name),
-            local_dir=local_dir,
+            local_dir=IMAGE_ENCODER_FOLDER,
         )
    
 
@@ -32,11 +33,10 @@ class CLIPBatchPredictor():
         self, 
         batch_size: int, 
         workers: int,
-        checkpoints_folder
     ):
         self.clip_image_processor = CLIPImageProcessor()
         self.image_enc = CLIPVisionModelWithProjection.from_pretrained(
-            os.path.join(checkpoints_folder, "sd-image-variations-diffusers", "image_encoder"), 
+            os.path.join(IMAGE_ENCODER_FOLDER, "image_encoder"), 
             torch_dtype=torch.bfloat16
         ).to("cuda")
         self.batch_size = batch_size
@@ -44,9 +44,9 @@ class CLIPBatchPredictor():
 
     def collate(self, batch):
         return self.clip_image_processor.preprocess(batch,
-            return_tensors=torch.bfloat16,
+            return_tensors="pt",
             do_convert_rgb=True
-        ).pixel_values
+        ).pixel_values.to(torch.bfloat16)
 
     def __call__(self, frame_gen):
         dataset = VideoDataset(frame_gen)
@@ -61,5 +61,5 @@ class CLIPBatchPredictor():
         with torch.no_grad():
             for batch in loader:
                 batch_gpu = batch.to("cuda")
-                embeds = self.vae(batch_gpu).image_embeds
+                embeds = self.image_enc(batch_gpu).image_embeds
                 yield embeds.cpu().float().numpy()

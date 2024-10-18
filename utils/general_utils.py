@@ -3,6 +3,8 @@ from functools import wraps
 import numpy as np
 import torch
 import resource
+import argparse
+import inspect
 
 def time_it(func):
     @wraps(func)
@@ -58,3 +60,20 @@ def argmedian(x, axis=None):
             lambda x: np.argpartition(x, len(x) // 2)[len(x) // 2],
             axis=axis, arr=x
         )
+
+def parse_args(main_function):
+    parser = argparse.ArgumentParser()
+
+    signature = inspect.signature(main_function)
+    for param_name, param in signature.parameters.items():
+        if param.default is not inspect.Parameter.empty:
+            param_type = type(param.default)
+            parser.add_argument(f'--{param_name}', type=param_type, default=param.default,
+                                help=f"Automatically detected argument: {param_name}, default: {param.default}")
+        else:
+            parser.add_argument(f'--{param_name}', required=True,
+                                help=f"Required argument: {param_name}")
+
+    args = parser.parse_args()
+
+    return args
