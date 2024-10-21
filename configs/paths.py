@@ -1,17 +1,17 @@
 import os
 
-DATA_FOLDER = "../../data"
+DATA_FOLDER        = "../../data"
 CHECKPOINTS_FOLDER = "../../checkpoints"
 
 # Github Repo
 ANIMATE_ANYONE_REPO = "../AnimateAnyone"
 DEPTH_ANYTHING_REPO = "../Depth-Anything-V2"
-DETECTRON2_REPO = "../detectron2"
-HUMANS_4D_REPO = "../4D-Humans"
-PHALP_REPO = "../PHALP"
-NVDIFFRAST_REPO = "../nvdiffrast"
-PROPAINTER_REPO = "../ProPainter"
-SAM2_REPO = "../sam2"
+DETECTRON2_REPO     = "../detectron2"
+HUMANS_4D_REPO      = "../4D-Humans"
+PHALP_REPO          = "../PHALP"
+NVDIFFRAST_REPO     = "../nvdiffrast"
+PROPAINTER_REPO     = "../ProPainter"
+SAM2_REPO           = "../sam2"
 
 # Data
 RAW_FOLDER                     = os.path.join(DATA_FOLDER, "data")
@@ -34,3 +34,7 @@ BASE_MODEL_FOLDER     = os.path.join(CHECKPOINTS_FOLDER, "stable-diffusion-v1-5"
 ANIMATE_ANYONE_FOLDER = os.path.join(CHECKPOINTS_FOLDER, "AnimateAnyone")
 DWPOSE_FOLDER         = os.path.join(CHECKPOINTS_FOLDER, "DWPose")
 VAE_FOLDER            = os.path.join(CHECKPOINTS_FOLDER, "sd-vae-ft-mse")
+
+# Training
+ML_RUNS = "./mlruns"
+TRAIN_OUTPUTS = "./train_outputs"
