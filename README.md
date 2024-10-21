@@ -88,5 +88,21 @@ See `configs/paths.py`
     from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel
     ```
 
+
+## Run scripts
+### Dataset Preprocessing
+1. `dataset_preprocessing/video_sampling_resizing.py`
+1. `dataset_preprocessing/remove_duplicate_videos.py`
+1. `dataset_preprocessing/human_detection_detectron2.py`
+1. `dataset_preprocessing/depth_estimation.py`
+1. `dataset_preprocessing/video_tracking_sam2.py`
+1. `dataset_preprocessing/video_inpainting.py`
+1. `dataset_preprocessing/vae_encoding.py`
+1. `dataset_preprocessing/get_apose_ref.py`
+1. `dataset_preprocessing/clip_embedding.py`
+1. `dataset_preprocessing/pose_estimation_4DH.py`
+1. `dataset_preprocessing/rasterizer_2d_joints.py`
+
+
 ## Note
 - The 45 2D joints are composed of 25+20 joints corresponding to 25 openpose joints and 20 other joints (part of Opentrack?)
