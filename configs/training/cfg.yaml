@@ -1,11 +1,8 @@
 data:
-  train_bs: 1
-  train_width: 512 
-  train_height: 512 
-  meta_paths:
-    - "./data/fashion_meta.json"
-  sample_rate: 4 
-  n_sample_frames: 24
+  train_batch_size: 1
+  window_stride: 4 
+  window_length: 24
+  num_workers: 8
 
 solver:
   gradient_accumulation_steps: 1

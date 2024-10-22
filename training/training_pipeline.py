@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 from omegaconf import OmegaConf
 import bitsandbytes as bnb
@@ -35,7 +36,7 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 
 from training.utils import get_torch_weight_dtype, compute_snr, save_checkpoint
-
+from training.training_dataset import TrainingDataset
 from training.models import Net
 
 class TrainingPipeline:
@@ -56,7 +57,7 @@ class TrainingPipeline:
         self.train_noise_scheduler, self.val_noise_scheduler = self.get_noise_scheduler()
         self.optimizer = self.get_optimizer(self.trainable_params, self.learning_rate)
         self.lr_scheduler = self.get_lr_scheduler(self.optimizer)
-        self.train_dataloader = self.get_dataloaders()
+        self.train_dataloader, self.train_dataset = self.get_dataloaders()
 
     def config_seed(self):
         if self.cfg.seed is not None:
@@ -252,13 +253,24 @@ class TrainingPipeline:
         )
 
     def get_dataloaders(self):
-        pass
+        train_dataset = TrainingDataset(
+            window_length=self.cfg.data.window_length, 
+            window_stride=self.cfg.data.window_stride
+        )
+        train_dataloader = DataLoader(
+            train_dataset, 
+            batch_size=self.cfg.data.train_batch_size, 
+            shuffle=True, 
+            num_workers=self.cfg.data.num_workers
+        )
+
+        return train_dataloader, train_dataset
     
     def log_infos(self, num_train_epochs):
         self.logger.info(self.accelerator.state, main_process_only=False)
 
         self.logger.info("***** Running training *****")
-        self.logger.info(f"  Num examples = {len(train_dataset)}")
+        self.logger.info(f"  Num examples = {len(self.train_dataset)}")
         self.logger.info(f"  Num Epochs = {num_train_epochs}")
         self.logger.info(f"  Instantaneous batch size per device = {self.cfg.data.train_bs}")
 
