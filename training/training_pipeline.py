@@ -19,7 +19,7 @@ import mlflow
 
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
-from accelerate.logging import get_logger
+from accelerate.logging import get_logger as get_accelerate_logger
 
 from transformers.utils import logging as transformers_logging
 from transformers import CLIPVisionModelWithProjection
@@ -35,7 +35,7 @@ from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 
-from training.utils import get_torch_weight_dtype, compute_snr, save_checkpoint
+from training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
 from training.training_dataset import TrainingDataset, collate_fn
 from training.models import Net
 
@@ -64,42 +64,41 @@ class TrainingPipeline:
             seed_everything(self.cfg.seed)
 
     def get_model(self):
-        image_enc = CLIPVisionModelWithProjection.from_pretrained(
-            IMAGE_ENCODER_FOLDER,
-        ).to(dtype=self.weight_dtype, device="cuda")
+        # image_enc = CLIPVisionModelWithProjection.from_pretrained(
+        #     os.path.join(IMAGE_ENCODER_FOLDER, "image_encoder"),
+        # ).to(dtype=self.weight_dtype, device="cuda")
 
-        vae = AutoencoderKL.from_pretrained(VAE_FOLDER).to(
-            "cuda", dtype=self.weight_dtype
-        )
+        # vae = AutoencoderKL.from_pretrained(VAE_FOLDER).to(
+        #     "cuda", dtype=self.weight_dtype
+        # )
 
         reference_unet = UNet2DConditionModel.from_pretrained(
-            BASE_MODEL_FOLDER,
-            subfolder="unet",
-        ).to(device="cuda", dtype=self.weight_dtype)
+            os.path.join(BASE_MODEL_FOLDER, "unet"),
+            torch_dtype=self.weight_dtype,
+            use_safetensors=True
+        ).to("cuda")
         reference_unet.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
-
+        
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
             os.path.join(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
             unet_additional_kwargs=self.infer_cfg.unet_additional_kwargs,
-        ).to(torch.float16).to("cuda")
+        ).to(self.weight_dtype).to("cuda")
         denoising_unet.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
 
-        pose_guider = PoseGuider(
-            conditioning_embedding_channels=320, block_out_channels=(16, 32, 96, 256)
-        ).to(device="cuda", dtype=self.weight_dtype)
+        pose_guider = PoseGuider(conditioning_embedding_channels=320).to(device="cuda", dtype=self.weight_dtype)
         pose_guider.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
 
         # Freeze
-        vae.requires_grad_(False)
-        image_enc.requires_grad_(False)
+        # vae.requires_grad_(False)
+        # image_enc.requires_grad_(False)
         reference_unet.requires_grad_(False)
         denoising_unet.requires_grad_(False)
         pose_guider.requires_grad_(False)
@@ -122,7 +121,7 @@ class TrainingPipeline:
             mode="read",
             fusion_blocks="full",
         )
-
+        
         if self.cfg.solver.enable_xformers_memory_efficient_attention:
             if is_xformers_available():
                 reference_unet.enable_xformers_memory_efficient_attention()
@@ -135,7 +134,7 @@ class TrainingPipeline:
         if self.cfg.solver.gradient_checkpointing:
             reference_unet.enable_gradient_checkpointing()
             denoising_unet.enable_gradient_checkpointing()
-
+        
         model = Net(
             reference_unet,
             denoising_unet,
@@ -151,7 +150,7 @@ class TrainingPipeline:
             return (
                 self.cfg.solver.learning_rate
                 * self.cfg.solver.gradient_accumulation_steps
-                * self.cfg.data.train_bs
+                * self.cfg.data.train_batch_size
                 * accelerator.num_processes
             )
         else:
@@ -194,7 +193,7 @@ class TrainingPipeline:
             transformers_logging.set_verbosity_error()
             diffusers_logging.set_verbosity_error()
 
-        return get_logger(__name__, log_level="INFO")
+        return get_accelerate_logger(__name__, log_level="DEBUG")
 
     def accelerate(self):
         self.model, self.optimizer, self.train_dataloader, self.lr_scheduler = self.accelerator.prepare(
@@ -274,10 +273,10 @@ class TrainingPipeline:
         self.logger.info("***** Running training *****")
         self.logger.info(f"  Num examples = {len(self.train_dataset)}")
         self.logger.info(f"  Num Epochs = {num_train_epochs}")
-        self.logger.info(f"  Instantaneous batch size per device = {self.cfg.data.train_bs}")
+        self.logger.info(f"  Instantaneous batch size per device = {self.cfg.data.train_batch_size}")
 
         total_batch_size = (
-            self.cfg.data.train_bs
+            self.cfg.data.train_batch_size
             * self.accelerator.num_processes
             * self.cfg.solver.gradient_accumulation_steps
         )
@@ -377,7 +376,7 @@ class TrainingPipeline:
             )
             loss = loss.mean()
         
-        avg_loss = self.accelerator.gather(loss.repeat(self.cfg.data.train_bs)).mean()
+        avg_loss = self.accelerator.gather(loss.repeat(self.cfg.data.train_batch_size)).mean()
         self.train_loss += avg_loss.item() / self.cfg.solver.gradient_accumulation_steps
         
         return loss

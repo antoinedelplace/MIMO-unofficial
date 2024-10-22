@@ -38,3 +38,6 @@ mediapipe
 
 # For training and use 8-bit Adam as Optimizer
 bitsandbytes
+
+mlflow
+h5py

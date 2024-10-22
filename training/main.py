@@ -1,5 +1,8 @@
+import sys
+sys.path.append(".")
+
 from utils.general_utils import set_memory_limit, parse_args
-from training_pipeline import TrainingPipeline
+from training.training_pipeline import TrainingPipeline
 
 def main(cpu_memory_limit_gb=60):
     set_memory_limit(cpu_memory_limit_gb)
@@ -14,4 +17,4 @@ if __name__ == "__main__":
 
 
 # accelerate config
-# accelerate launch main.py
+# accelerate launch training/main.py
