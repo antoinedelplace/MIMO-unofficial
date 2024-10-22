@@ -18,7 +18,7 @@ def run_on_image(input_path, clip, output_folder):
     image_embeds = list(clip([image]))[0]
     print("np.shape(image_embeds)", np.shape(image_embeds))
     
-    output_path = os.path.join(output_folder, basename).replace(".jpg", ".npz")
+    output_path = os.path.join(output_folder, basename).replace(".png", ".npz")
     np.savez_compressed(output_path, 
                         image_embeds=image_embeds)
 
@@ -38,7 +38,7 @@ def main(
 
     clip = CLIPBatchPredictor(batch_size, workers)
 
-    # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.jpg"]
+    # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.png"]
     input_files = sorted(os.listdir(input_folder))
     output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
 
