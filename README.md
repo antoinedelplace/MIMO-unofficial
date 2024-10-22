@@ -88,6 +88,22 @@ See `configs/paths.py`
     from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel
     ```
 
+- For `training/main.py`
+    - in `AnimateAnyone/src/models/mutual_self_attention.py` line 48:
+    ```bash
+        self.register_reference_hooks(
+            mode,
+            do_classifier_free_guidance,
+            attention_auto_machine_weight,
+            gn_auto_machine_weight,
+            style_fidelity,
+            reference_attn,
+            reference_adain,
+            batch_size=batch_size,
+            fusion_blocks=fusion_blocks,
+        )
+    ```
+
 
 ## Run scripts
 ### Dataset Preprocessing

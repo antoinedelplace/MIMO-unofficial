@@ -96,12 +96,12 @@ class TrainingPipeline:
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
 
-        # Freeze
+        ## Freeze
         # vae.requires_grad_(False)
         # image_enc.requires_grad_(False)
         reference_unet.requires_grad_(False)
-        denoising_unet.requires_grad_(False)
-        pose_guider.requires_grad_(False)
+        # denoising_unet.requires_grad_(False)
+        # pose_guider.requires_grad_(False)
 
         # Set motion module learnable
         for name, module in denoising_unet.named_modules():
@@ -394,7 +394,7 @@ class TrainingPipeline:
     
     def run_one_step(self, batch):
         with self.accelerator.accumulate(self.model):
-            apose, rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_video = batch
+            rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_video, latent_apose = batch
 
             noise = self.get_noise(latent_video)
             timesteps = self.get_timesteps(latent_video)
@@ -409,7 +409,7 @@ class TrainingPipeline:
             noise_pred = self.model(
                         noisy_latent_video,
                         timesteps,
-                        apose,
+                        latent_apose,
                         a_pose_clip,
                         rast_2d_joints,
                         latents_scene,
