@@ -97,8 +97,8 @@ See `configs/paths.py`
 1. `dataset_preprocessing/depth_estimation.py`
 1. `dataset_preprocessing/video_tracking_sam2.py`
 1. `dataset_preprocessing/video_inpainting.py`
-1. `dataset_preprocessing/vae_encoding.py`
 1. `dataset_preprocessing/get_apose_ref.py`
+1. `dataset_preprocessing/vae_encoding.py`
 1. `dataset_preprocessing/clip_embedding.py`
 1. `dataset_preprocessing/pose_estimation_4DH.py`
 1. `dataset_preprocessing/rasterizer_2d_joints.py`
