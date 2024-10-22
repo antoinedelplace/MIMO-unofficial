@@ -17,15 +17,16 @@ from configs.paths import RASTERIZED_2D_JOINTS_FOLDER, APOSE_REF_FOLDER, APOSE_C
 def collate_fn(batch, weight_dtype):
     data_apose = []
     data_rast_2d_joints = []
+    data_apose_clip = []
     data_video_encoded = []
     data_scene_encoded = []
     data_occlusion_encoded = []
-    for a_pose, rast_2d_joints, encoded_frames in batch:
+    for a_pose, rast_2d_joints, a_pose_clip, encoded_frames in batch:
         # the model expects RGB inputs
         a_pose = a_pose[:, :, ::-1] / 255.0
-        image = image.transpose(2, 0, 1)
-        image = torch.as_tensor(image, dtype=weight_dtype)
-        data_apose.append(image)
+        a_pose = a_pose.transpose(2, 0, 1)
+        a_pose = torch.as_tensor(a_pose, dtype=weight_dtype)
+        data_apose.append(a_pose)
 
         # the model expects RGB inputs
         rast_2d_joints = rast_2d_joints[:, :, :, ::-1] / 255.0
@@ -33,13 +34,16 @@ def collate_fn(batch, weight_dtype):
         rast_2d_joints = torch.as_tensor(rast_2d_joints, dtype=weight_dtype)
         data_rast_2d_joints.append(rast_2d_joints)
 
-        data_scene_encoded.append(encoded_frames["latent_scene"])
-        data_occlusion_encoded.append(encoded_frames["latent_occlusion"])
-        data_video_encoded.append(encoded_frames["latent_video"])
+        data_apose_clip.append(torch.as_tensor(a_pose_clip["image_embeds"][0], dtype=weight_dtype))
+
+        data_scene_encoded.append(torch.as_tensor(encoded_frames["latent_scene"], dtype=weight_dtype))
+        data_occlusion_encoded.append(torch.as_tensor(encoded_frames["latent_occlusion"], dtype=weight_dtype))
+        data_video_encoded.append(torch.as_tensor(encoded_frames["latent_video"], dtype=weight_dtype))
 
     return (
         torch.stack(data_apose, dim=0), 
         torch.stack(data_rast_2d_joints, dim=0),
+        torch.stack(data_apose_clip, dim=0),
         torch.stack(data_scene_encoded, dim=0),
         torch.stack(data_occlusion_encoded, dim=0),
         torch.stack(data_video_encoded, dim=0)
@@ -115,22 +119,21 @@ class TrainingDataset(Dataset):
         begin_frame_scene = self.begin_frame_scene[index]
         begin_frame_video = self.begin_frame_video[index]
 
-        a_pose = cv2.imread(f"{filename}.png")
+        a_pose = cv2.imread(os.path.join(APOSE_REF_FOLDER, f"{filename}.png"))
 
         rast_2d_joints_video = cv2.VideoCapture(os.path.join(RASTERIZED_2D_JOINTS_FOLDER, f"{filename}.mp4"))
-        rast_2d_joints = frame_gen_from_video(rast_2d_joints_video)
+        rast_2d_joints = np.array(list(frame_gen_from_video(rast_2d_joints_video)))
         rast_2d_joints_video.release()
         rast_2d_joints = rast_2d_joints[begin_frame_scene:begin_frame_scene+self.window_length]
 
         a_pose_clip = dict(np.load(os.path.join(APOSE_CLIP_EMBEDS_FOLDER, f"{filename}.npz")))
-        a_pose_clip["image_embeds"] = a_pose_clip["image_embeds"][begin_frame_scene:begin_frame_scene+self.window_length]
 
         encoded_frames = dict(np.load(os.path.join(ENCODED_OCCLUSION_SCENE_FOLDER, f"{filename}.npz")))
         encoded_frames["latent_scene"] = encoded_frames["latent_scene"][begin_frame_scene:begin_frame_scene+self.window_length]
         encoded_frames["latent_occlusion"] = encoded_frames["latent_occlusion"][begin_frame_scene:begin_frame_scene+self.window_length]
         encoded_frames["latent_video"] = encoded_frames["latent_video"][begin_frame_video:begin_frame_video+self.window_length]
 
-        return a_pose, rast_2d_joints, encoded_frames
+        return a_pose, rast_2d_joints, a_pose_clip, encoded_frames
 
     def __len__(self):
         return len(self.begin_frame_scene)

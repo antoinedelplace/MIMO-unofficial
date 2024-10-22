@@ -201,13 +201,13 @@ class TrainingPipeline:
         )
 
         # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-        num_update_steps_per_epoch = np.ceil(
+        num_update_steps_per_epoch = int(np.ceil(
             len(self.train_dataloader) / self.cfg.solver.gradient_accumulation_steps
-        )
+        ))
         # Afterwards we recalculate our number of training epochs
-        num_train_epochs = np.ceil(
+        num_train_epochs = int(np.ceil(
             self.cfg.solver.max_train_steps / num_update_steps_per_epoch
-        )
+        ))
 
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers initializes automatically on the main process.
@@ -340,15 +340,15 @@ class TrainingPipeline:
                 ).long()
 
     def get_target_noise(self, latents, noise, timesteps):
-        if self.train_noise_scheduler.prediction_type == "epsilon":
+        if self.train_noise_scheduler.config.prediction_type == "epsilon":
             return noise
-        elif self.train_noise_scheduler.prediction_type == "v_prediction":
+        elif self.train_noise_scheduler.config.prediction_type == "v_prediction":
             return self.train_noise_scheduler.get_velocity(
                 latents, noise, timesteps
             )
         else:
             raise ValueError(
-                f"Unknown prediction type {self.train_noise_scheduler.prediction_type}"
+                f"Unknown prediction type {self.train_noise_scheduler.config.prediction_type}"
             )
     
     def get_loss(self, noise_pred, target_noise, timesteps):
@@ -394,7 +394,7 @@ class TrainingPipeline:
     
     def run_one_step(self, batch):
         with self.accelerator.accumulate(self.model):
-            apose, rast_2d_joints, latents_scene, latents_occlusion, latent_video = batch
+            apose, rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_video = batch
 
             noise = self.get_noise(latent_video)
             timesteps = self.get_timesteps(latent_video)
@@ -410,6 +410,7 @@ class TrainingPipeline:
                         noisy_latent_video,
                         timesteps,
                         apose,
+                        a_pose_clip,
                         rast_2d_joints,
                         latents_scene,
                         latents_occlusion,
