@@ -8,7 +8,7 @@ from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
-from configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER
+from configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER
 
 
 def visualize(vae, latent, video, input_path, output_folder):
@@ -37,7 +37,7 @@ def visualize(vae, latent, video, input_path, output_folder):
 
     output_file.release()
 
-def run_on_video(input_path, occlusion_input_folder, vae, output_folder):
+def run_on_video(input_path, occlusion_input_folder, resized_folder, vae, output_folder):
     basename = os.path.basename(input_path)
 
     video = cv2.VideoCapture(input_path)
@@ -57,15 +57,26 @@ def run_on_video(input_path, occlusion_input_folder, vae, output_folder):
     # visualize(vae, latent_occlusion, video, input_path, output_folder)
     
     video.release()
+
+    video = cv2.VideoCapture(os.path.join(resized_folder, basename))
+    frame_gen = frame_gen_from_video(video)
+
+    latent_video = np.concatenate(list(vae.encode(frame_gen)))
+    print("np.shape(latent_video)", np.shape(latent_video))
+    # visualize(vae, latent_video, video, input_path, output_folder)
+    
+    video.release()
     
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
     np.savez_compressed(output_path, 
                         latent_scene=latent_scene, 
-                        latent_occlusion=latent_occlusion)
+                        latent_occlusion=latent_occlusion,
+                        latent_video=latent_video)
 
 def main(
         scene_input_folder=FILLED_SCENE_FOLDER,
         occlusion_input_folder=OCCLUSION_FOLDER,
+        resized_folder=RESIZED_FOLDER,
         output_folder=ENCODED_OCCLUSION_SCENE_FOLDER,
         batch_size=16,
         workers=8,
@@ -90,7 +101,7 @@ def main(
             continue
 
         input_path = os.path.join(scene_input_folder, filename)
-        try_wrapper(lambda: run_on_video(input_path, occlusion_input_folder, vae, output_folder), filename, log_path)
+        try_wrapper(lambda: run_on_video(input_path, occlusion_input_folder, resized_folder, vae, output_folder), filename, log_path)
 
 
 if __name__ == "__main__":
