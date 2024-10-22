@@ -40,9 +40,7 @@ uncond_ratio: 0.1
 noise_offset: 0.05
 snr_gamma: 5.0
 enable_zero_snr: True 
-stage1_ckpt_step: 980
 
 seed: 123456
 resume_from_checkpoint: ''
-checkpointing_steps: 2000
 exp_name: 'test1'

@@ -4,7 +4,7 @@ sys.path.append(".")
 from configs.paths import ANIMATE_ANYONE_REPO, ML_RUNS, TRAIN_OUTPUTS, IMAGE_ENCODER_FOLDER, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, VAE_FOLDER
 sys.path.append(ANIMATE_ANYONE_REPO)
 
-import os, logging, time
+import os, logging, time, random
 import numpy as np
 from datetime import datetime
 from tqdm import tqdm
@@ -36,7 +36,7 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 
 from training.utils import get_torch_weight_dtype, compute_snr, save_checkpoint
-from training.training_dataset import TrainingDataset
+from training.training_dataset import TrainingDataset, collate_fn
 from training.models import Net
 
 class TrainingPipeline:
@@ -261,7 +261,9 @@ class TrainingPipeline:
             train_dataset, 
             batch_size=self.cfg.data.train_batch_size, 
             shuffle=True, 
-            num_workers=self.cfg.data.num_workers
+            num_workers=self.cfg.data.num_workers,
+            collate_fn=lambda x: collate_fn(x, self.weight_dtype),
+            pin_memory=True
         )
 
         return train_dataloader, train_dataset
@@ -393,21 +395,25 @@ class TrainingPipeline:
     
     def run_one_step(self, batch):
         with self.accelerator.accumulate(self.model):
-            latents, _ = batch
-            noise = self.get_noise(latents)
-            timesteps = self.get_timesteps(latents)
+            apose, rast_2d_joints, latents_scene, latents_occlusion, latent_video = batch
 
-            noisy_latents = self.train_noise_scheduler.add_noise(
-                latents, noise, timesteps
+            noise = self.get_noise(latent_video)
+            timesteps = self.get_timesteps(latent_video)
+
+            noisy_latent_video = self.train_noise_scheduler.add_noise(
+                latent_video, noise, timesteps
             )
-            target_noise = self.get_target_noise(latents, noise, timesteps)
+            target_noise = self.get_target_noise(latent_video, noise, timesteps)
+
+            uncond_fwd = random.random() < self.cfg.uncond_ratio
 
             noise_pred = self.model(
-                        noisy_latents,
+                        noisy_latent_video,
                         timesteps,
-                        ref_image_latents,
-                        clip_image_embeds,
-                        pixel_values_pose,
+                        apose,
+                        rast_2d_joints,
+                        latents_scene,
+                        latents_occlusion,
                         uncond_fwd=uncond_fwd,
                     )
             

@@ -23,22 +23,25 @@ class Net(nn.Module):
 
     def forward(
         self,
-        noisy_latents,
+        noisy_latent_video,
         timesteps,
-        ref_image_latents,
-        clip_image_embeds,
-        pose_img,
+        apose,
+        rast_2d_joints,
+        latents_scene,
+        latents_occlusion,
         uncond_fwd: bool = False,
     ):
         pose_cond_tensor = pose_img.to(device="cuda")
         pose_fea = self.pose_guider(pose_cond_tensor)
+
+        encoder_hidden_states = torch.cat((latents_scene, latents_occlusion))
 
         if not uncond_fwd:
             ref_timesteps = torch.zeros_like(timesteps)
             self.reference_unet(
                 ref_image_latents,
                 ref_timesteps,
-                encoder_hidden_states=clip_image_embeds,
+                encoder_hidden_states=encoder_hidden_states,
                 return_dict=False,
             )
             self.reference_control_reader.update(self.reference_control_writer)

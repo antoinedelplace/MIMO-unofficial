@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-import os, cv2
+import os, cv2, torch
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -11,6 +11,37 @@ from dataset_preprocessing.video_tracking_sam2 import get_index_first_frame_with
 
 from configs.paths import RASTERIZED_2D_JOINTS_FOLDER, APOSE_REF_FOLDER, APOSE_CLIP_EMBEDS_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, DETECTRON2_FOLDER
 
+
+def collate_fn(batch, weight_dtype):
+    data_apose = []
+    data_rast_2d_joints = []
+    data_video_encoded = []
+    data_scene_encoded = []
+    data_occlusion_encoded = []
+    for a_pose, rast_2d_joints, encoded_frames in batch:
+        # the model expects RGB inputs
+        a_pose = a_pose[:, :, ::-1] / 255.0
+        image = image.transpose(2, 0, 1)
+        image = torch.as_tensor(image, dtype=weight_dtype)
+        data_apose.append(image)
+
+        # the model expects RGB inputs
+        rast_2d_joints = rast_2d_joints[:, :, :, ::-1] / 255.0
+        rast_2d_joints = rast_2d_joints.transpose(0, 3, 1, 2)
+        rast_2d_joints = torch.as_tensor(rast_2d_joints, dtype=weight_dtype)
+        data_rast_2d_joints.append(rast_2d_joints)
+
+        data_scene_encoded.append(encoded_frames["latent_scene"])
+        data_occlusion_encoded.append(encoded_frames["latent_occlusion"])
+        data_video_encoded.append(encoded_frames["latent_video"])
+
+    return (
+        torch.stack(data_apose, dim=0), 
+        torch.stack(data_rast_2d_joints, dim=0),
+        torch.stack(data_scene_encoded, dim=0),
+        torch.stack(data_occlusion_encoded, dim=0),
+        torch.stack(data_video_encoded, dim=0)
+    )
 
 def get_begin_frame(input_files, window_length, window_stride, detectron_score_threshold):
     input_filename = []
