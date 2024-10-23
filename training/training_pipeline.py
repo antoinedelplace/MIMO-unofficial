@@ -408,6 +408,8 @@ class TrainingPipeline:
         with self.accelerator.accumulate(self.model):
             rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_video, latent_apose = batch
 
+            latent_video = latent_video.transpose(1, 2)  # (b, c, f, h, w)
+
             noise = self.get_noise(latent_video)
             timesteps = self.get_timesteps(latent_video)
 
