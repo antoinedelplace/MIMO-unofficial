@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import ANIMATE_ANYONE_REPO, ML_RUNS, TRAIN_OUTPUTS, IMAGE_ENCODER_FOLDER, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, VAE_FOLDER
+from configs.paths import ANIMATE_ANYONE_REPO, ML_RUNS, TRAIN_OUTPUTS, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER
 sys.path.append(ANIMATE_ANYONE_REPO)
 
 import os, logging, time, random

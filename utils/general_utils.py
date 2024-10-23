@@ -64,14 +64,31 @@ def argmedian(x, axis=None):
 def parse_args(main_function):
     parser = argparse.ArgumentParser()
 
+    used_short_versions = set()
+
     signature = inspect.signature(main_function)
     for param_name, param in signature.parameters.items():
+        short_version = f'-{param_name[0]}'
+        if short_version in used_short_versions:
+            for char in param_name[1:]:
+                short_version = f'-{char}'
+                if short_version not in used_short_versions:
+                    break
+            else:
+                short_version = None
+        
+        if short_version:
+            used_short_versions.add(short_version)
+            param_call = (short_version, f'--{param_name}')
+        else:
+            param_call = (f'--{param_name}')
+
         if param.default is not inspect.Parameter.empty:
             param_type = type(param.default)
-            parser.add_argument(f'--{param_name}', type=param_type, default=param.default,
+            parser.add_argument(*param_call, type=param_type, default=param.default,
                                 help=f"Automatically detected argument: {param_name}, default: {param.default}")
         else:
-            parser.add_argument(f'--{param_name}', required=True,
+            parser.add_argument(*param_call, required=True,
                                 help=f"Required argument: {param_name}")
 
     args = parser.parse_args()

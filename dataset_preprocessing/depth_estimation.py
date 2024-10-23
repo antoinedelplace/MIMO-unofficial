@@ -5,7 +5,7 @@ import os, cv2, torch, tqdm
 import numpy as np
 
 from utils.video_utils import frame_gen_from_video
-from utils.depth_anything_v2_utils import BatchPredictor
+from utils.depth_anything_v2_utils import DepthBatchPredictor
 from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
 from configs.paths import RESIZED_FOLDER, DEPTH_FOLDER, CHECKPOINTS_FOLDER
@@ -66,7 +66,7 @@ def main(
 
     set_memory_limit(cpu_memory_limit_gb)
 
-    depth_anything = BatchPredictor(batch_size, workers, input_size, input_size, **model_configs[encoder])
+    depth_anything = DepthBatchPredictor(batch_size, workers, input_size, input_size, **model_configs[encoder])
     depth_anything.load_state_dict(torch.load(os.path.join(CHECKPOINTS_FOLDER, f'depth_anything_v2_{encoder}.pth'), map_location='cpu'))
     depth_anything = depth_anything.to(torch.bfloat16).to(device).eval()
 

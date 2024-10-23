@@ -14,7 +14,7 @@ from depth_anything_v2.dpt import DepthAnythingV2
 from utils.torch_utils import VideoDataset
 
 
-class BatchPredictor(DepthAnythingV2):
+class DepthBatchPredictor(DepthAnythingV2):
     def __init__(
         self, 
         batch_size: int, workers: int,
@@ -22,7 +22,7 @@ class BatchPredictor(DepthAnythingV2):
         *args,
         **kargs
     ):
-        super(BatchPredictor, self).__init__(*args, **kargs)
+        super(DepthBatchPredictor, self).__init__(*args, **kargs)
 
         self.batch_size = batch_size
         self.workers = workers
