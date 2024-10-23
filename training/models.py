@@ -32,18 +32,18 @@ class Net(nn.Module):
         latents_occlusion,
         uncond_fwd: bool = False,
     ):
-        print("noisy_latent_video", noisy_latent_video.shape)
-        print("timesteps", timesteps.shape)
-        print("latent_apose", latent_apose.shape)
-        print("a_pose_clip", a_pose_clip.shape)
-        print("rast_2d_joints", rast_2d_joints.shape)
-        print("latents_scene", latents_scene.shape)
-        print("latents_occlusion", latents_occlusion.shape)
+        # print("noisy_latent_video", noisy_latent_video.shape)
+        # print("timesteps", timesteps.shape)
+        # print("latent_apose", latent_apose.shape)
+        # print("a_pose_clip", a_pose_clip.shape)
+        # print("rast_2d_joints", rast_2d_joints.shape)
+        # print("latents_scene", latents_scene.shape)
+        # print("latents_occlusion", latents_occlusion.shape)
 
         rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
         pose_features = self.pose_guider(rast_2d_joints)
 
-        print("pose_features", pose_features.shape)
+        # print("pose_features", pose_features.shape)
 
         if not uncond_fwd:
             ref_timesteps = torch.zeros_like(timesteps)

@@ -196,8 +196,8 @@ class TrainingPipeline:
         return get_accelerate_logger(__name__, log_level="DEBUG")
 
     def accelerate(self):
-        self.model, self.optimizer, self.train_dataloader, self.lr_scheduler = self.accelerator.prepare(
-            self.model, self.optimizer, self.train_dataloader, self.lr_scheduler
+        self.model, self.optimizer, self.train_dataloader, self.val_dataloader, self.lr_scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.train_dataloader, self.val_dataloader, self.lr_scheduler
         )
 
         # We need to recalculate our total training steps as the size of the training dataloader may have changed.
@@ -300,8 +300,7 @@ class TrainingPipeline:
 
     def load_from_checkpoints(self, num_update_steps_per_epoch):
         if self.accelerator.is_main_process:
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
+            os.makedirs(self.save_dir, exist_ok=True)
                 
         first_epoch = 0
         global_step = 0
@@ -387,9 +386,9 @@ class TrainingPipeline:
             loss = loss.mean()
         
         avg_loss = self.accelerator.gather(loss.repeat(self.cfg.data.train_batch_size)).mean()
-        self.train_loss += avg_loss.item() / self.cfg.solver.gradient_accumulation_steps
+        global_loss = avg_loss.item() / self.cfg.solver.gradient_accumulation_steps
         
-        return loss
+        return loss, global_loss
 
     def backpropagate(self, loss):
         self.accelerator.backward(loss)
@@ -402,7 +401,7 @@ class TrainingPipeline:
         self.lr_scheduler.step()
         self.optimizer.zero_grad()
     
-    def run_one_step(self, batch):
+    def run_one_step(self, batch, is_validation=False):
         with self.accelerator.accumulate(self.model):
             rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_video, latent_apose = batch
 
@@ -429,34 +428,22 @@ class TrainingPipeline:
                         uncond_fwd=uncond_fwd,
                     )
             
-            loss = self.get_loss(noise_pred, target_noise, timesteps)
-            self.backpropagate(loss)
+            loss, global_loss = self.get_loss(noise_pred, target_noise, timesteps)
+            if not is_validation:
+                self.backpropagate(loss)
 
-            return loss
+            return loss, global_loss
     
-    def reset_after_run(self, progress_bar, t_data, loss):
+    def reset_after_run(self, progress_bar, t_data, loss, global_loss=None):
         if self.accelerator.sync_gradients:
             self.reference_control_reader.clear()
             self.reference_control_writer.clear()
             progress_bar.update(1)
-            self.global_step += 1
-            self.accelerator.log({"train_loss": self.train_loss}, step=self.global_step)
 
-            self.validate()
-        
-        logs = {
-            "step_loss": loss.detach().item(),
-            "lr": self.lr_scheduler.get_last_lr()[0],
-            "td": f"{t_data:.2f}s",
-        }
-        progress_bar.set_postfix(**logs)
-    
-    def reset_after_val_run(self, progress_bar, t_data, loss):
-        if self.accelerator.sync_gradients:
-            self.reference_control_reader.clear()
-            self.reference_control_writer.clear()
-            progress_bar.update(1)
-            self.accelerator.log({"val_loss": self.val_loss}, step=self.global_step)
+            if global_loss is not None:
+                self.accelerator.log({"train_loss": global_loss}, step=self.global_step)
+                self.global_step += 1
+                self.validate()
         
         logs = {
             "step_loss": loss.detach().item(),
@@ -469,9 +456,8 @@ class TrainingPipeline:
         t_data_start = time.time()
         for step, batch in enumerate(self.train_dataloader):
             t_data = time.time() - t_data_start
-            self.train_loss = 0.0
-            loss = self.run_one_step(batch)
-            self.reset_after_run(progress_bar, t_data, loss)
+            loss, global_loss = self.run_one_step(batch)
+            self.reset_after_run(progress_bar, t_data, loss, global_loss)
             t_data_start = time.time()
 
             if self.global_step >= self.cfg.solver.max_train_steps:
@@ -480,9 +466,6 @@ class TrainingPipeline:
     def validate(self):
         if self.global_step % self.cfg.val.validation_steps == 0:
             if self.accelerator.is_main_process:
-                generator = torch.Generator(device=self.accelerator.device)
-                generator.manual_seed(self.cfg.seed)
-
                 progress_bar = self.get_progress_bar(self.global_step)
                 progress_bar.set_description(f"Validation")
                 
@@ -491,12 +474,13 @@ class TrainingPipeline:
                     t_data_start = time.time()
                     for step, batch in enumerate(self.val_dataloader):
                         t_data = time.time() - t_data_start
-                        self.val_loss = 0.0
-                        loss = self.run_one_step(batch)
-                        self.reset_after_val_run(progress_bar, t_data, loss)
+                        loss, global_loss = self.run_one_step(batch, is_validation=True)
+                        total_val_loss += global_loss
+                        self.reset_after_run(progress_bar, t_data, loss)
                         t_data_start = time.time()
                 
                 total_val_loss /= len(self.val_dataloader)
+                self.accelerator.log({"val_loss": total_val_loss}, step=self.global_step)
 
                 if total_val_loss < self.best_total_val_loss:
                     self.best_total_val_loss = total_val_loss
@@ -519,6 +503,7 @@ class TrainingPipeline:
 
     def save_model(self, save_dir):
         if self.accelerator.is_main_process:
+            os.makedirs(save_dir, exist_ok=True)
             save_path = os.path.join(save_dir, f"checkpoint-{self.global_step}")
             delete_additional_ckpt(save_dir, 1)
             self.accelerator.save_state(save_path)
