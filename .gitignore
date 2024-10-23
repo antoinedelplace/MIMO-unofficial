@@ -1,0 +1,12 @@
+# Byte-compiled
+__pycache__/
+
+# Data
+/data/
+
+# Training
+/mlruns/
+/train_outputs/
+
+# Environment
+/venv/
