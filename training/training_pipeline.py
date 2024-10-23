@@ -507,13 +507,13 @@ class TrainingPipeline:
             save_path = os.path.join(save_dir, f"checkpoint-{self.global_step}")
             delete_additional_ckpt(save_dir, 1)
             self.accelerator.save_state(save_path)
-            # save motion module only
-            unwrap_model = self.accelerator.unwrap_model(self.model)
-            save_checkpoint(
-                unwrap_model.denoising_unet,
-                save_dir,
-                "motion_module",
-                self.global_step,
-                self.logger,
-                total_limit=3,
-            )
+            # save motion module and pose guider only
+            # unwrap_model = self.accelerator.unwrap_model(self.model)
+            # save_checkpoint(
+            #     unwrap_model.denoising_unet,
+            #     save_dir,
+            #     ("motion_module", "pose_guider"),
+            #     self.global_step,
+            #     self.logger,
+            #     total_limit=3,
+            # )

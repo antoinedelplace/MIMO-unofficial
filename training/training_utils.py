@@ -38,32 +38,33 @@ def compute_snr(noise_scheduler, timesteps):
     snr = (alpha / sigma) ** 2
     return snr
 
-def save_checkpoint(model, save_dir, prefix, ckpt_num, logger, total_limit=None):
-    save_path = os.path.join(save_dir, f"{prefix}-{ckpt_num}.pth")
+def save_checkpoint(model, save_dir, modules_to_save, ckpt_num, logger, total_limit=None):
+    for prefix in modules_to_save:
+        save_path = os.path.join(save_dir, f"{prefix}-{ckpt_num}.pth")
 
-    if total_limit is not None:
-        checkpoints = os.listdir(save_dir)
-        checkpoints = [d for d in checkpoints if d.startswith(prefix)]
-        checkpoints = sorted(
-            checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0])
-        )
-
-        if len(checkpoints) >= total_limit:
-            num_to_remove = len(checkpoints) - total_limit + 1
-            removing_checkpoints = checkpoints[0:num_to_remove]
-            logger.info(
-                f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+        if total_limit is not None:
+            checkpoints = os.listdir(save_dir)
+            checkpoints = [d for d in checkpoints if d.startswith(prefix)]
+            checkpoints = sorted(
+                checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0])
             )
-            logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
 
-            for removing_checkpoint in removing_checkpoints:
-                removing_checkpoint = os.path.join(save_dir, removing_checkpoint)
-                os.remove(removing_checkpoint)
+            if len(checkpoints) >= total_limit:
+                num_to_remove = len(checkpoints) - total_limit + 1
+                removing_checkpoints = checkpoints[0:num_to_remove]
+                logger.info(
+                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+                )
+                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
 
-    mm_state_dict = OrderedDict()
-    state_dict = model.state_dict()
-    for key in state_dict:
-        if "motion_module" in key:
-            mm_state_dict[key] = state_dict[key]
+                for removing_checkpoint in removing_checkpoints:
+                    removing_checkpoint = os.path.join(save_dir, removing_checkpoint)
+                    os.remove(removing_checkpoint)
 
-    torch.save(mm_state_dict, save_path)
+        mm_state_dict = OrderedDict()
+        state_dict = model.state_dict()
+        for key in state_dict:
+            if prefix in key:
+                mm_state_dict[key] = state_dict[key]
+
+        torch.save(mm_state_dict, save_path)
