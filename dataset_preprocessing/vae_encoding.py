@@ -67,7 +67,7 @@ def run_on_video(input_path, occlusion_input_folder, resized_folder, apose_ref_f
     
     video.release()
 
-    a_pose = cv2.imread(os.path.join(APOSE_REF_FOLDER, basename).replace(".mp4", ".png"))
+    a_pose = cv2.imread(os.path.join(apose_ref_folder, basename).replace(".mp4", ".png"))
     latent_apose = np.concatenate(list(vae.encode([a_pose])))
     print("np.shape(latent_apose)", np.shape(latent_apose))
     

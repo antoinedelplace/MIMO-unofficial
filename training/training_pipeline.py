@@ -57,7 +57,7 @@ class TrainingPipeline:
         self.train_noise_scheduler, self.val_noise_scheduler = self.get_noise_scheduler()
         self.optimizer = self.get_optimizer(self.trainable_params, self.learning_rate)
         self.lr_scheduler = self.get_lr_scheduler(self.optimizer)
-        self.train_dataloader, self.train_dataset = self.get_dataloaders()
+        self.train_dataloader, self.train_dataset, self.val_dataloader, self.val_dataset = self.get_dataloaders()
 
     def config_seed(self):
         if self.cfg.seed is not None:
@@ -252,10 +252,11 @@ class TrainingPipeline:
         )
 
     def get_dataloaders(self):
-        train_dataset = TrainingDataset(
+        dataset = TrainingDataset(
             window_length=self.cfg.data.window_length, 
             window_stride=self.cfg.data.window_stride
         )
+        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.9, 0.1])
         train_dataloader = DataLoader(
             train_dataset, 
             batch_size=self.cfg.data.train_batch_size, 
@@ -264,14 +265,23 @@ class TrainingPipeline:
             collate_fn=lambda x: collate_fn(x, self.weight_dtype),
             pin_memory=True
         )
+        val_dataloader = DataLoader(
+            val_dataset, 
+            batch_size=self.cfg.data.train_batch_size, 
+            shuffle=False, 
+            num_workers=self.cfg.data.num_workers,
+            collate_fn=lambda x: collate_fn(x, self.weight_dtype),
+            pin_memory=True
+        )
 
-        return train_dataloader, train_dataset
+        return train_dataloader, train_dataset, val_dataloader, val_dataset
     
     def log_infos(self, num_train_epochs):
         self.logger.info(self.accelerator.state, main_process_only=False)
 
         self.logger.info("***** Running training *****")
-        self.logger.info(f"  Num examples = {len(self.train_dataset)}")
+        self.logger.info(f"  Num train examples = {len(self.train_dataset)}")
+        self.logger.info(f"  Num val examples = {len(self.val_dataset)}")
         self.logger.info(f"  Num Epochs = {num_train_epochs}")
         self.logger.info(f"  Instantaneous batch size per device = {self.cfg.data.train_batch_size}")
 

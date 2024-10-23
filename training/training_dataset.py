@@ -98,9 +98,8 @@ class TrainingDataset(Dataset):
         else:
             encoded_files = set([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(ENCODED_OCCLUSION_SCENE_FOLDER)])
             rast_2d_joints_files = set([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(RASTERIZED_2D_JOINTS_FOLDER)])
-            apose_files = set([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(APOSE_REF_FOLDER)])
             apose_clip_files = set([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(APOSE_CLIP_EMBEDS_FOLDER)])
-            input_files = sorted(list(set.intersection(encoded_files, rast_2d_joints_files, apose_files, apose_clip_files).difference(set("log_error"))))
+            input_files = sorted(list(set.intersection(encoded_files, rast_2d_joints_files, apose_clip_files).difference(set("log_error"))))
 
             self.input_filename, self.begin_frame_scene, self.begin_frame_video = get_begin_frame(input_files, window_length, window_stride, detectron_score_threshold)
 
