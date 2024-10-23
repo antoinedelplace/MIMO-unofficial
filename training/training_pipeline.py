@@ -22,9 +22,8 @@ from accelerate.utils import DistributedDataParallelKwargs
 from accelerate.logging import get_logger as get_accelerate_logger
 
 from transformers.utils import logging as transformers_logging
-from transformers import CLIPVisionModelWithProjection
 
-from diffusers import AutoencoderKL, DDIMScheduler
+from diffusers import DDIMScheduler
 from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as diffusers_logging
 from diffusers.utils.import_utils import is_xformers_available
@@ -67,19 +66,10 @@ class TrainingPipeline:
             seed_everything(self.cfg.seed)
 
     def get_model(self):
-        # image_enc = CLIPVisionModelWithProjection.from_pretrained(
-        #     os.path.join(IMAGE_ENCODER_FOLDER, "image_encoder"),
-        # ).to(dtype=self.weight_dtype, device="cuda")
-
-        # vae = AutoencoderKL.from_pretrained(VAE_FOLDER).to(
-        #     "cuda", dtype=self.weight_dtype
-        # )
-
         reference_unet = UNet2DConditionModel.from_pretrained(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
-            torch_dtype=self.weight_dtype,
             use_safetensors=True
-        ).to("cuda")
+        )
         reference_unet.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
@@ -88,7 +78,7 @@ class TrainingPipeline:
             os.path.join(BASE_MODEL_FOLDER, "unet"),
             os.path.join(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
             unet_additional_kwargs=self.infer_cfg.unet_additional_kwargs,
-        ).to(self.weight_dtype).to("cuda")
+        )
         denoising_unet.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
@@ -103,14 +93,12 @@ class TrainingPipeline:
         )
         denoising_unet.conv_in.weight = torch.nn.Parameter(torch.cat([original_weights] * 3, dim=1))
 
-        pose_guider = PoseGuider(conditioning_embedding_channels=320).to(device="cuda", dtype=self.weight_dtype)
+        pose_guider = PoseGuider(conditioning_embedding_channels=320)
         pose_guider.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
 
         ## Freeze
-        # vae.requires_grad_(False)
-        # image_enc.requires_grad_(False)
         reference_unet.requires_grad_(False)
         # denoising_unet.requires_grad_(False)
         # pose_guider.requires_grad_(False)
