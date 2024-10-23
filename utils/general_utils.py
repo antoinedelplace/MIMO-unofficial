@@ -68,10 +68,10 @@ def parse_args(main_function):
 
     signature = inspect.signature(main_function)
     for param_name, param in signature.parameters.items():
-        short_version = f'-{param_name[0]}'
+        short_version = param_name[0]
         if short_version in used_short_versions:
             for char in param_name[1:]:
-                short_version = f'-{char}'
+                short_version = char
                 if short_version not in used_short_versions:
                     break
             else:
@@ -79,7 +79,7 @@ def parse_args(main_function):
         
         if short_version:
             used_short_versions.add(short_version)
-            param_call = (short_version, f'--{param_name}')
+            param_call = (f'-{short_version}', f'--{param_name}')
         else:
             param_call = (f'--{param_name}')
 
