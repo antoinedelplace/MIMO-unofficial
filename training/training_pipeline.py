@@ -193,7 +193,7 @@ class TrainingPipeline:
             transformers_logging.set_verbosity_error()
             diffusers_logging.set_verbosity_error()
 
-        return get_accelerate_logger(__name__, log_level="DEBUG")
+        return get_accelerate_logger(__name__, log_level="INFO")
 
     def accelerate(self):
         self.model, self.optimizer, self.train_dataloader, self.val_dataloader, self.lr_scheduler = self.accelerator.prepare(

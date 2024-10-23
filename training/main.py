@@ -17,4 +17,10 @@ if __name__ == "__main__":
 
 
 # accelerate config
+#    - multi-GPU
+#    - numa efficiency
+#    - fp16
+
 # accelerate launch training/main.py
+
+# mlflow ui -p 5003
