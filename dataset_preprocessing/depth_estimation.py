@@ -10,6 +10,29 @@ from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
 from configs.paths import RESIZED_FOLDER, DEPTH_FOLDER, CHECKPOINTS_FOLDER
 
+DEPTH_ANYTHING_MODEL_CONFIGS = {
+        'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
+        'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
+        'vitl': {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]},
+        'vitg': {'encoder': 'vitg', 'features': 384, 'out_channels': [1536, 1536, 1536, 1536]}
+    }
+
+def get_depth(frame_gen, depth_anything, output_file=None):
+    output_frames = None if output_file is not None else []
+
+    for output_batch in depth_anything.infer_video(frame_gen):
+        mini = output_batch.min()
+        depth = (output_batch - mini) / (output_batch.max() - mini) * 255.0
+        depth = depth.astype(np.uint8)
+        depth = np.repeat(depth[..., np.newaxis], 3, axis=-1)
+
+        if output_file is not None:
+            for frame in depth:
+                output_file.write(frame)
+        else:
+            output_frames += depth
+    
+    return output_frames
 
 def run_on_video(input_path, depth_anything, output_folder):
     video = cv2.VideoCapture(input_path)
@@ -30,14 +53,7 @@ def run_on_video(input_path, depth_anything, output_folder):
     
     frame_gen = frame_gen_from_video(video)
 
-    for output_batch in depth_anything.infer_video(frame_gen):
-        mini = output_batch.min()
-        depth = (output_batch - mini) / (output_batch.max() - mini) * 255.0
-        depth = depth.astype(np.uint8)
-        depth = np.repeat(depth[..., np.newaxis], 3, axis=-1)
-
-        for frame in depth:
-            output_file.write(frame)
+    get_depth(frame_gen, depth_anything, output_file)
 
     video.release()
     output_file.release()
@@ -57,16 +73,9 @@ def main(
 
     device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
-    model_configs = {
-        'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
-        'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
-        'vitl': {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]},
-        'vitg': {'encoder': 'vitg', 'features': 384, 'out_channels': [1536, 1536, 1536, 1536]}
-    }
-
     set_memory_limit(cpu_memory_limit_gb)
 
-    depth_anything = DepthBatchPredictor(batch_size, workers, input_size, input_size, **model_configs[encoder])
+    depth_anything = DepthBatchPredictor(batch_size, workers, input_size, input_size, **DEPTH_ANYTHING_MODEL_CONFIGS[encoder])
     depth_anything.load_state_dict(torch.load(os.path.join(CHECKPOINTS_FOLDER, f'depth_anything_v2_{encoder}.pth'), map_location='cpu'))
     depth_anything = depth_anything.to(torch.bfloat16).to(device).eval()
 

@@ -1,4 +1,7 @@
-import os, cv2, fnmatch, tqdm
+import sys
+sys.path.append(".")
+
+import os, cv2, tqdm
 
 from utils.video_utils import frame_gen_from_video
 from utils.general_utils import try_wrapper, set_memory_limit, parse_args
@@ -102,13 +105,12 @@ def main(
     output_files = sorted([os.path.splitext(os.path.basename(file))[0] for file in os.listdir(output_folder)])
 
     for filename in tqdm.tqdm(input_files):
-        if fnmatch.fnmatch(filename, '*-original.mp4'):
-            basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
-            if basename_wo_ext in output_files:
-                continue
+        basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
+        if basename_wo_ext in output_files:
+            continue
 
-            input_path = os.path.join(input_folder, filename)
-            try_wrapper(lambda: process_video(input_path, output_size, output_fps, output_folder), filename, log_path)
+        input_path = os.path.join(input_folder, filename)
+        try_wrapper(lambda: process_video(input_path, output_size, output_fps, output_folder), filename, log_path)
 
 
 if __name__ == "__main__":
