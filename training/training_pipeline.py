@@ -34,6 +34,7 @@ from src.models.mutual_self_attention import ReferenceAttentionControl
 from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
+from src.models.resnet import InflatedConv3d
 
 from training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
 from training.training_dataset import TrainingDataset, collate_fn
@@ -92,6 +93,15 @@ class TrainingPipeline:
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
+
+        original_weights = denoising_unet.conv_in.weight.data  # Shape: (out_channels, in_channels, D, H, W)
+        denoising_unet.conv_in = InflatedConv3d(
+            3 * denoising_unet.conv_in.in_channels,  # multiply input channel by 3
+            denoising_unet.conv_in.out_channels, 
+            kernel_size=3, 
+            padding=(1, 1)
+        )
+        denoising_unet.conv_in.weight = torch.nn.Parameter(torch.cat([original_weights] * 3, dim=1))
 
         pose_guider = PoseGuider(conditioning_embedding_channels=320).to(device="cuda", dtype=self.weight_dtype)
         pose_guider.load_state_dict(

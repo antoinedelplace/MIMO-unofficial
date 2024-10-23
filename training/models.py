@@ -43,7 +43,7 @@ class Net(nn.Module):
         rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
         pose_features = self.pose_guider(rast_2d_joints)
 
-        # encoder_hidden_states = torch.cat((latents_scene, latents_occlusion), dim=2)  # (b, f, c+c, h, w)
+        print("pose_features", pose_features.shape)
 
         if not uncond_fwd:
             ref_timesteps = torch.zeros_like(timesteps)
@@ -57,6 +57,10 @@ class Net(nn.Module):
             self.reference_control_reader.update(self.reference_control_writer)
         else:
             encoder_hidden_states = torch.zeros_like(a_pose_clip).unsqueeze(1) # (b, 1, d)
+
+        latents_scene = latents_scene.transpose(1, 2)  # (b, c, f, h, w)
+        latents_occlusion = latents_occlusion.transpose(1, 2)  # (b, c, f, h, w)
+        noisy_latent_video = torch.cat((noisy_latent_video, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
 
         model_pred = self.denoising_unet(
             noisy_latent_video,
