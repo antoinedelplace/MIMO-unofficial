@@ -17,8 +17,11 @@ from utils.torch_utils import VideoDataset
 class DepthBatchPredictor(DepthAnythingV2):
     def __init__(
         self, 
-        batch_size: int, workers: int,
-        width, height,
+        batch_size: int,
+        workers: int,
+        weight_dtype,
+        width,
+        height,
         *args,
         **kargs
     ):
@@ -26,6 +29,7 @@ class DepthBatchPredictor(DepthAnythingV2):
 
         self.batch_size = batch_size
         self.workers = workers
+        self.weight_dtype = weight_dtype
         self.width = width
         self.height = height
 
@@ -38,7 +42,7 @@ class DepthBatchPredictor(DepthAnythingV2):
             image = cv2.resize(image, ((self.width // 14) * 14, (self.height // 14) * 14), interpolation=cv2.INTER_LINEAR)
             image = (image - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
             image = image.transpose(2, 0, 1)
-            image = torch.as_tensor(image, dtype=torch.bfloat16)
+            image = torch.as_tensor(image, dtype=self.weight_dtype)
             data.append(image)
         return torch.stack(data, dim=0)
 

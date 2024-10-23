@@ -30,7 +30,7 @@ def get_depth(frame_gen, depth_anything, output_file=None):
             for frame in depth:
                 output_file.write(frame)
         else:
-            output_frames += depth
+            output_frames.append(depth)
     
     return output_frames
 
@@ -75,8 +75,8 @@ def main(
 
     set_memory_limit(cpu_memory_limit_gb)
 
-    depth_anything = DepthBatchPredictor(batch_size, workers, input_size, input_size, **DEPTH_ANYTHING_MODEL_CONFIGS[encoder])
-    depth_anything.load_state_dict(torch.load(os.path.join(CHECKPOINTS_FOLDER, f'depth_anything_v2_{encoder}.pth'), map_location='cpu'))
+    depth_anything = DepthBatchPredictor(batch_size, workers, torch.bfloat16, input_size, input_size, **DEPTH_ANYTHING_MODEL_CONFIGS[encoder])
+    depth_anything.load_state_dict(torch.load(os.path.join(CHECKPOINTS_FOLDER, f'depth_anything_v2_{encoder}.pth'), map_location='cpu', weights_only=True))
     depth_anything = depth_anything.to(torch.bfloat16).to(device).eval()
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
