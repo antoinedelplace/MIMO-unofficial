@@ -45,9 +45,11 @@ class TrainingPipeline:
         self.infer_cfg = OmegaConf.load("./configs/inference/inference.yaml")
 
         self.config_seed()
+        self.best_total_val_loss = np.infty
         
         self.weight_dtype = get_torch_weight_dtype(self.cfg.weight_dtype)
         self.save_dir = f"{TRAIN_OUTPUTS}/{self.cfg.exp_name}"
+        self.save_dir_val = f"{TRAIN_OUTPUTS}/{self.cfg.exp_name}/val"
 
         self.accelerator = self.get_accelerator()
         self.logger = self.get_logger(self.accelerator)
@@ -439,6 +441,22 @@ class TrainingPipeline:
             progress_bar.update(1)
             self.global_step += 1
             self.accelerator.log({"train_loss": self.train_loss}, step=self.global_step)
+
+            self.validate()
+        
+        logs = {
+            "step_loss": loss.detach().item(),
+            "lr": self.lr_scheduler.get_last_lr()[0],
+            "td": f"{t_data:.2f}s",
+        }
+        progress_bar.set_postfix(**logs)
+    
+    def reset_after_val_run(self, progress_bar, t_data, loss):
+        if self.accelerator.sync_gradients:
+            self.reference_control_reader.clear()
+            self.reference_control_writer.clear()
+            progress_bar.update(1)
+            self.accelerator.log({"val_loss": self.val_loss}, step=self.global_step)
         
         logs = {
             "step_loss": loss.detach().item(),
@@ -465,8 +483,24 @@ class TrainingPipeline:
                 generator = torch.Generator(device=self.accelerator.device)
                 generator.manual_seed(self.cfg.seed)
 
-                self.logger.info("Running validation... ")
-                # TODO
+                progress_bar = self.get_progress_bar(self.global_step)
+                progress_bar.set_description(f"Validation")
+                
+                total_val_loss = 0.0
+                with torch.no_grad():
+                    t_data_start = time.time()
+                    for step, batch in enumerate(self.val_dataloader):
+                        t_data = time.time() - t_data_start
+                        self.val_loss = 0.0
+                        loss = self.run_one_step(batch)
+                        self.reset_after_val_run(progress_bar, t_data, loss)
+                        t_data_start = time.time()
+                
+                total_val_loss /= len(self.val_dataloader)
+
+                if total_val_loss < self.best_total_val_loss:
+                    self.best_total_val_loss = total_val_loss
+                    self.save_model(self.save_dir_val)
 
     def train(self):
         num_update_steps_per_epoch, num_train_epochs = self.accelerate()
@@ -478,21 +512,21 @@ class TrainingPipeline:
         for epoch in range(first_epoch, num_train_epochs):
             progress_bar.set_description(f"Epoch {epoch}")
             self.run_one_epoch(progress_bar)
-            self.save_model()
+            self.save_model(self.save_dir)
         
         self.accelerator.wait_for_everyone()
         self.accelerator.end_training()
 
-    def save_model(self):
+    def save_model(self, save_dir):
         if self.accelerator.is_main_process:
-            save_path = os.path.join(self.save_dir, f"checkpoint-{self.global_step}")
-            delete_additional_ckpt(self.save_dir, 1)
+            save_path = os.path.join(save_dir, f"checkpoint-{self.global_step}")
+            delete_additional_ckpt(save_dir, 1)
             self.accelerator.save_state(save_path)
             # save motion module only
             unwrap_model = self.accelerator.unwrap_model(self.model)
             save_checkpoint(
                 unwrap_model.denoising_unet,
-                self.save_dir,
+                save_dir,
                 "motion_module",
                 self.global_step,
                 self.logger,
