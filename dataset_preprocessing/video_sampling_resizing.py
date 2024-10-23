@@ -6,6 +6,42 @@ from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 from configs.paths import RAW_FOLDER, RESIZED_FOLDER
 
 
+def sampling_resizing(frame_gen, input_fps, output_fps, input_size, output_width, output_file=None):
+    output_frames = None if output_file is not None else []
+
+    time_per_frame_original = 1 / input_fps
+    time_per_frame_target = 1 / output_fps
+    accumulated_time = 0
+
+    width, height = input_size
+
+    for frame in frame_gen:
+        accumulated_time += time_per_frame_original
+
+        if accumulated_time >= time_per_frame_target:
+            accumulated_time -= time_per_frame_target
+
+            if width < height:
+                square_image = cv2.copyMakeBorder(
+                    frame, 
+                    top=0, 
+                    bottom=0, 
+                    left=(height-width)//2, 
+                    right=(height-width+1)//2, 
+                    borderType=cv2.BORDER_REFLECT_101
+                )
+            else:
+                square_image = frame[:, width//2-height//2: width//2+(height+1)//2]
+            
+            resized_image = cv2.resize(square_image, (output_width, output_width), interpolation = cv2.INTER_LINEAR)
+
+            if output_file is not None:
+                output_file.write(resized_image)
+            else:
+                output_frames.append(resized_image)
+    
+    return output_frames
+
 def process_video(input_path, output_size, output_fps, output_folder):
     video = cv2.VideoCapture(input_path)
 
@@ -29,32 +65,8 @@ def process_video(input_path, output_size, output_fps, output_folder):
     )
 
     frame_gen = frame_gen_from_video(video)
-    
-    time_per_frame_original = 1 / frames_per_second
-    time_per_frame_target = 1 / output_fps
-    accumulated_time = 0
 
-    for frame in frame_gen:
-        accumulated_time += time_per_frame_original
-
-        if accumulated_time >= time_per_frame_target:
-            accumulated_time -= time_per_frame_target
-
-            if width < height:
-                square_image = cv2.copyMakeBorder(
-                    frame, 
-                    top=0, 
-                    bottom=0, 
-                    left=(height-width)//2, 
-                    right=(height-width+1)//2, 
-                    borderType=cv2.BORDER_REFLECT_101
-                )
-            else:
-                square_image = frame[:, width//2-height//2: width//2+(height+1)//2]
-            
-            resized_image = cv2.resize(square_image, (output_size, output_size), interpolation = cv2.INTER_LINEAR)
-
-            output_file.write(resized_image)
+    sampling_resizing(frame_gen, frames_per_second, output_fps, (width, height), output_size, output_file)
 
     video.release()
     output_file.release()
