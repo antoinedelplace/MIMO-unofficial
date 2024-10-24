@@ -20,7 +20,7 @@ from inference_propainter import get_ref_index
 
 pretrain_model_url = 'https://github.com/sczhou/ProPainter/releases/download/v0.1.0/'
 
-class BatchPredictor():
+class ProPainterBatchPredictor():
     def __init__(
         self, 
         batch_size: int,
@@ -88,7 +88,7 @@ class BatchPredictor():
                 end = -self.neighbor_stride
                 if i_batch == 0:
                     start = 0
-                elif i_batch == len(dataset)-1:
+                if i_batch == len(loader)-1:
                     end = len(update_batch_gpu)
                 yield update_batch_gpu[start:end], masks_gpu[0, start:end, 0, :, :].cpu().numpy()
 

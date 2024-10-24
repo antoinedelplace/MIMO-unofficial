@@ -38,11 +38,13 @@ from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
+from mimo.utils.propainter_utils import ProPainterBatchPredictor
 
 from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing
 from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
 from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settings, post_processing_detectron2
 from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers
+from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
 
 class InferencePipeline():
     def __init__(  # See default values in inference/main.py
@@ -56,6 +58,7 @@ class InferencePipeline():
             score_threshold_detectron2,
             batch_size_depth,
             batch_size_detectron2,
+            batch_size_propainter,
         ):
         self.num_workers = num_workers
         self.input_net_size = input_net_size
@@ -64,6 +67,7 @@ class InferencePipeline():
         self.score_threshold_detectron2 = score_threshold_detectron2
         self.batch_size_depth = batch_size_depth
         self.batch_size_detectron2 = batch_size_detectron2
+        self.batch_size_propainter = batch_size_propainter
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
@@ -214,6 +218,11 @@ class InferencePipeline():
                                 foreground_mask, 
                                 min_frame_idx, 
                                 max_frame_idx)
+    
+    def inpaint_scene_layer(self, scene_frames):
+        predictor = ProPainterBatchPredictor(self.batch_size_propainter, self.num_workers)
+
+        return inpaint_frames(scene_frames, predictor)
 
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
@@ -229,7 +238,7 @@ class InferencePipeline():
         print("frames_per_second", frames_per_second)
         print("num_frames", num_frames)
 
-        frame_gen = np.array(list(frame_gen_from_video(video)))
+        frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
         print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
 
         resized_frames = np.array(sampling_resizing(frame_gen, 
@@ -255,6 +264,9 @@ class InferencePipeline():
         scene_frames = np.array(scene_frames)
         print("np.shape(human_frames)", np.shape(human_frames), type(human_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
+        print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
+
+        scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
 
         video.release()

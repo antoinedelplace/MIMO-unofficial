@@ -4,11 +4,26 @@ sys.path.append(".")
 import os, cv2, tqdm
 
 from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from mimo.utils.propainter_utils import BatchPredictor
+from mimo.utils.propainter_utils import ProPainterBatchPredictor
 from mimo.utils.video_utils import frame_gen_from_video
 
 from mimo.configs.paths import SCENE_FOLDER, FILLED_SCENE_FOLDER
 
+def inpaint_frames(frame_gen, predictor, output_file=None):
+    output_frames = None if output_file is not None else []
+
+    for comp_frames, masks_dilated in tqdm.tqdm(predictor.inpaint(frame_gen)):
+        for frame, mask in zip(comp_frames, masks_dilated):
+            alpha = 0.5
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            # frame_bgr = cv2.addWeighted(cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), alpha, frame_bgr, 1 - alpha, 0)
+            
+            if output_file is not None:
+                output_file.write(frame_bgr)
+            else:
+                output_frames.append(frame_bgr)
+    
+    return output_frames
 
 def run_on_video(input_path, predictor, output_folder):
     video = cv2.VideoCapture(input_path)
@@ -29,12 +44,7 @@ def run_on_video(input_path, predictor, output_folder):
 
     frame_gen = frame_gen_from_video(video)
 
-    for comp_frames, masks_dilated in tqdm.tqdm(predictor.inpaint(frame_gen)):
-        for frame, mask in zip(comp_frames, masks_dilated):
-            alpha = 0.5
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            # frame_bgr = cv2.addWeighted(cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), alpha, frame_bgr, 1 - alpha, 0)
-            output_file.write(frame_bgr)
+    inpaint_frames(frame_gen, predictor, output_file)
 
     video.release()
     output_file.release()
@@ -50,7 +60,7 @@ def main(
     log_path = os.path.join(output_folder, "error_log.txt")
 
     set_memory_limit(cpu_memory_limit_gb)
-    predictor = BatchPredictor(batch_size, workers)
+    predictor = ProPainterBatchPredictor(batch_size, workers)
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
     input_files = sorted(os.listdir(input_folder))

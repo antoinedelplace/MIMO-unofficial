@@ -17,6 +17,7 @@ def main(
         score_threshold_detectron2 = 0.9,
         batch_size_depth=12,
         batch_size_detectron2=32,
+        batch_size_propainter=128,
     ):
     set_memory_limit(cpu_memory_limit_gb)
 
@@ -30,6 +31,7 @@ def main(
         score_threshold_detectron2=score_threshold_detectron2,
         batch_size_depth=batch_size_depth,
         batch_size_detectron2=batch_size_detectron2,
+        batch_size_propainter=batch_size_propainter,
     )
 
     pipe(input_video_path, output_video_path)
