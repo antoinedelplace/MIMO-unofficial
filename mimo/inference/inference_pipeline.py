@@ -195,7 +195,7 @@ class InferencePipeline():
         model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
         predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
-        # predictor = self.accelerator.prepare(predictor)
+        predictor = self.accelerator.prepare(predictor)
 
         (
             min_frame_idx, 
@@ -224,29 +224,29 @@ class InferencePipeline():
         print("frames_per_second", frames_per_second)
         print("num_frames", num_frames)
 
-        frame_gen = list(frame_gen_from_video(video))
-        print("np.shape(frame_gen)", np.shape(frame_gen))
+        frame_gen = np.array(list(frame_gen_from_video(video)))
+        print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
 
-        resized_frames = sampling_resizing(frame_gen, 
+        resized_frames = np.array(sampling_resizing(frame_gen, 
                                            frames_per_second, 
                                            output_fps=self.input_net_fps, 
                                            input_size=(width, height), 
-                                           output_width=self.input_net_size)
-        print("np.shape(resized_frames)", np.shape(resized_frames))
+                                           output_width=self.input_net_size))
+        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
 
         depth_frames = np.concatenate(self.depth_estimation(resized_frames))
-        print("np.shape(depth_frames)", np.shape(depth_frames))
+        print("np.shape(depth_frames)", np.shape(depth_frames), type(depth_frames))
 
         detectron2_output = self.get_detectron2_output(resized_frames)
-        print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']))
-        print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']))
-        print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']))
-        print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']))
-        print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']))
+        print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']), type(detectron2_output['data_frame_index']))
+        print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']), type(detectron2_output['data_pred_boxes']))
+        print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']), type(detectron2_output['data_scores']))
+        print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
+        print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
 
         human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
-        print("np.shape(human_frames)", np.shape(human_frames))
-        print("np.shape(occlusion_frames)", np.shape(occlusion_frames))
-        print("np.shape(scene_frames)", np.shape(scene_frames))
+        print("np.shape(human_frames)", np.shape(human_frames), type(human_frames))
+        print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
+        print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
 
         video.release()

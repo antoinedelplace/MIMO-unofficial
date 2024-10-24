@@ -87,12 +87,12 @@ def post_processing_detectron2(outputs, output_path=None):
 
     for i in range(len(outputs)):
         data_scores.append(outputs[i].scores.cpu().numpy())
-        data_frame_index.append([i]*len(data_scores[-1]))
+        data_frame_index.append(np.ones(len(data_scores[-1]), dtype=np.int32)*i)
         data_pred_boxes.append(outputs[i].pred_boxes.tensor.cpu().numpy())
         data_pred_classes.append(outputs[i].pred_classes.cpu().numpy())
         data_pred_masks.append(outputs[i].pred_masks.cpu().numpy())
 
-    data_frame_index = np.concatenate(data_frame_index, dtype=np.int32)
+    data_frame_index = np.concatenate(data_frame_index)
     data_pred_boxes = np.concatenate(data_pred_boxes)
     data_scores = np.concatenate(data_scores)
     data_pred_classes = np.concatenate(data_pred_classes)
