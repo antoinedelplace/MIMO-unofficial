@@ -14,7 +14,8 @@ def main(
         input_net_size=768,
         input_net_fps=24,
         depth_anything_encoder='vitl',
-        batch_size_depth=12
+        batch_size_depth=12,
+        batch_size_detectron2=32,
     ):
     set_memory_limit(cpu_memory_limit_gb)
 
@@ -25,7 +26,8 @@ def main(
         input_net_size=input_net_size,
         input_net_fps=input_net_fps,
         depth_anything_encoder=depth_anything_encoder,
-        batch_size_depth=batch_size_depth
+        batch_size_depth=batch_size_depth,
+        batch_size_detectron2=batch_size_detectron2,
     )
 
     pipe(input_video_path, output_video_path)

@@ -14,7 +14,7 @@ import os, cv2, torch, tqdm
 import numpy as np
 
 from utils.video_utils import frame_gen_from_video
-from utils.detectron2_utils import BatchPredictor
+from utils.detectron2_utils import DetectronBatchPredictor
 from utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
 
@@ -131,7 +131,7 @@ def main(
     log_path = os.path.join(output_folder, "error_log.txt")
 
     cfg = get_cfg_settings()
-    predictor = BatchPredictor(cfg, batch_size, workers)
+    predictor = DetectronBatchPredictor(cfg, batch_size, workers)
     set_memory_limit(cpu_memory_limit_gb)
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]

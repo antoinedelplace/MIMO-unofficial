@@ -33,9 +33,11 @@ from training.training_utils import get_torch_weight_dtype
 from utils.video_utils import frame_gen_from_video
 from utils.depth_anything_v2_utils import DepthBatchPredictor
 from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
+from utils.detectron2_utils import DetectronBatchPredictor
 
 from dataset_preprocessing.video_sampling_resizing import sampling_resizing
 from dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
+from dataset_preprocessing.human_detection_detectron2 import get_cfg_settings
 
 class InferencePipeline():
     def __init__(  # See default values in inference/main.py
@@ -46,13 +48,15 @@ class InferencePipeline():
             input_net_size,
             input_net_fps,
             depth_anything_encoder,
-            batch_size_depth
+            batch_size_depth,
+            batch_size_detectron2,
         ):
         self.num_workers = num_workers
         self.input_net_size = input_net_size
         self.input_net_fps = input_net_fps
         self.depth_anything_encoder = depth_anything_encoder
         self.batch_size_depth = batch_size_depth
+        self.batch_size_detectron2 = batch_size_detectron2
 
         self.infer_cfg = OmegaConf.load("./configs/inference/inference.yaml")
 
@@ -172,6 +176,14 @@ class InferencePipeline():
 
         return get_depth(resized_frames, depth_anything)
 
+    def get_detectron2_output(self, resized_frames):
+        cfg = get_cfg_settings()
+        predictor = DetectronBatchPredictor(cfg, self.batch_size_detectron2, self.num_workers)
+
+        predictor.model = self.accelerator.prepare(predictor.model)
+
+        return list(predictor(resized_frames))
+
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
 
@@ -198,5 +210,8 @@ class InferencePipeline():
 
         depth_frames = np.concatenate(self.depth_estimation(resized_frames))
         print("np.shape(depth_frames)", np.shape(depth_frames))
+
+        detectron2_output = self.get_detectron2_output(resized_frames)
+        print("len(detectron2_output)", len(detectron2_output))
 
         video.release()

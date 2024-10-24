@@ -26,7 +26,7 @@ class Prediction(NamedTuple):
     class_name: str
 
 
-class BatchPredictor:
+class DetectronBatchPredictor:
     def __init__(self, cfg: CfgNode, batch_size: int, workers: int):
         self.cfg = cfg.clone()  # cfg can be modified by model
         self.batch_size = batch_size
