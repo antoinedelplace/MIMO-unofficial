@@ -6,12 +6,12 @@ import numpy as np
 
 import pytorch3d.transforms as pt3d
 
-from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
-from utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Openpose_25_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
+from mimo.utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Openpose_25_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
 
-from configs.paths import HUMAN_FOLDER, POSES_4DH_FOLDER
+from mimo.configs.paths import HUMAN_FOLDER, POSES_4DH_FOLDER
 
 
 def make_iterable(obj):
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/pose_estimation_4DH.py
+# python mimo/dataset_preprocessing/pose_estimation_4DH.py
 
 
 

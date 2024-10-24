@@ -1,20 +1,21 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import DETECTRON2_REPO
+from mimo.configs.paths import DETECTRON2_REPO
 sys.path.append(DETECTRON2_REPO)
 
 from typing import Iterable, List, NamedTuple
 
-import detectron2.data.transforms as T
 import torch
+from torch.utils.data import DataLoader
+
+import detectron2.data.transforms as T
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import CfgNode
 from detectron2.modeling import build_model
 from detectron2.structures import Instances
-from torch.utils.data import DataLoader
 
-from utils.torch_utils import VideoDataset
+from mimo.utils.torch_utils import VideoDataset
 
 
 class Prediction(NamedTuple):

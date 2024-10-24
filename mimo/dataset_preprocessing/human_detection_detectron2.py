@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import RESIZED_FOLDER, DETECTRON2_FOLDER, DETECTRON2_REPO
+from mimo.configs.paths import RESIZED_FOLDER, DETECTRON2_FOLDER, DETECTRON2_REPO
 sys.path.append(DETECTRON2_REPO)
 
 from detectron2 import model_zoo
@@ -13,9 +13,9 @@ from detectron2.data import MetadataCatalog
 import os, cv2, torch, tqdm
 import numpy as np
 
-from utils.video_utils import frame_gen_from_video
-from utils.detectron2_utils import DetectronBatchPredictor
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.detectron2_utils import DetectronBatchPredictor
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
 
 def get_cfg_settings():
@@ -48,7 +48,7 @@ def visualize(predictions, video, input_path, output_folder):
         isColor=True,
     )
 
-    metadata = metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
+    metadata = metadata = MetadataCatalog.get("coco_2017_test")
     video_visualizer = VideoVisualizer(metadata, ColorMode.IMAGE)
 
     frame_gen = frame_gen_from_video(video)
@@ -150,4 +150,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/human_detection_detectron2.py
+# python mimo/dataset_preprocessing/human_detection_detectron2.py

@@ -6,12 +6,12 @@ import os, cv2, torch
 import numpy as np
 from torch.utils.data import Dataset
 
-from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import try_wrapper
 
-from dataset_preprocessing.video_tracking_sam2 import get_index_first_frame_with_character
+from mimo.dataset_preprocessing.video_tracking_sam2 import get_index_first_frame_with_character
 
-from configs.paths import RASTERIZED_2D_JOINTS_FOLDER, APOSE_CLIP_EMBEDS_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, DETECTRON2_FOLDER, TRAIN_OUTPUTS
+from mimo.configs.paths import RASTERIZED_2D_JOINTS_FOLDER, APOSE_CLIP_EMBEDS_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, DETECTRON2_FOLDER, TRAIN_OUTPUTS
 
 
 def collate_fn(batch, weight_dtype):

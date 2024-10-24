@@ -4,11 +4,11 @@ sys.path.append(".")
 import os, cv2, torch, tqdm
 import numpy as np
 
-from utils.video_utils import frame_gen_from_video
-from utils.depth_anything_v2_utils import DepthBatchPredictor
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
-from configs.paths import RESIZED_FOLDER, DEPTH_FOLDER, CHECKPOINTS_FOLDER
+from mimo.configs.paths import RESIZED_FOLDER, DEPTH_FOLDER, CHECKPOINTS_FOLDER
 
 DEPTH_ANYTHING_MODEL_CONFIGS = {
         'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
@@ -95,4 +95,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/depth_estimation.py
+# python mimo/dataset_preprocessing/depth_estimation.py

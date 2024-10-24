@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import DEPTH_ANYTHING_REPO
+from mimo.configs.paths import DEPTH_ANYTHING_REPO
 sys.path.append(DEPTH_ANYTHING_REPO)
 
 import torch, cv2
@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 from depth_anything_v2.dpt import DepthAnythingV2
 
-from utils.torch_utils import VideoDataset
+from mimo.utils.torch_utils import VideoDataset
 
 
 class DepthBatchPredictor(DepthAnythingV2):

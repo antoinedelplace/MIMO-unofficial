@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import ANIMATE_ANYONE_REPO, ML_RUNS, TRAIN_OUTPUTS, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER
+from mimo.configs.paths import ANIMATE_ANYONE_REPO, ML_RUNS, TRAIN_OUTPUTS, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER
 sys.path.append(ANIMATE_ANYONE_REPO)
 
 import os, logging, time, random
@@ -35,14 +35,14 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
 
-from training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
-from training.training_dataset import TrainingDataset, collate_fn
-from training.models import Net
+from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
+from mimo.training.training_dataset import TrainingDataset, collate_fn
+from mimo.training.models import Net
 
 class TrainingPipeline:
     def __init__(self):
-        self.cfg = OmegaConf.load("./configs/training/cfg.yaml")
-        self.infer_cfg = OmegaConf.load("./configs/inference/inference.yaml")
+        self.cfg = OmegaConf.load("./mimo/configs/training/cfg.yaml")
+        self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
         self.config_seed()
         self.best_total_val_loss = np.infty

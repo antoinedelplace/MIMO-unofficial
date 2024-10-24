@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 import numpy as np
 import cv2
 
-from utils.video_utils import frame_from_video
+from mimo.utils.video_utils import frame_from_video
 
 class NpzDataset(Dataset):
     def __init__(self, nparray_data):

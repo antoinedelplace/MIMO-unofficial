@@ -2,10 +2,10 @@ import sys
 sys.path.append(".")
 
 import os, tqdm
-from utils.video_utils import hash_file
-from utils.general_utils import try_wrapper, parse_args
+from mimo.utils.video_utils import hash_file
+from mimo.utils.general_utils import try_wrapper, parse_args
 
-from configs.paths import RESIZED_FOLDER
+from mimo.configs.paths import RESIZED_FOLDER
 
 
 def process_video(input_path, hashset):
@@ -38,4 +38,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/remove_duplicate_videos.py
+# python mimo/dataset_preprocessing/remove_duplicate_videos.py

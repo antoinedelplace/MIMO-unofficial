@@ -1,8 +1,9 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import ANIMATE_ANYONE_REPO, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, CHECKPOINTS_FOLDER
+from mimo.configs.paths import ANIMATE_ANYONE_REPO, SAM2_REPO, BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, CHECKPOINTS_FOLDER, SAM2_REPO
 sys.path.append(ANIMATE_ANYONE_REPO)
+sys.path.append(SAM2_REPO)
 
 import os, logging, cv2
 import torch
@@ -28,16 +29,19 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
 
-from training.training_utils import get_torch_weight_dtype
+from sam2.build_sam import build_sam2_video_predictor
 
-from utils.video_utils import frame_gen_from_video
-from utils.depth_anything_v2_utils import DepthBatchPredictor
-from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
-from utils.detectron2_utils import DetectronBatchPredictor
+from mimo.training.training_utils import get_torch_weight_dtype
 
-from dataset_preprocessing.video_sampling_resizing import sampling_resizing
-from dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
-from dataset_preprocessing.human_detection_detectron2 import get_cfg_settings
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
+from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
+from mimo.utils.detectron2_utils import DetectronBatchPredictor
+
+from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing
+from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
+from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settings
+from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers
 
 class InferencePipeline():
     def __init__(  # See default values in inference/main.py
@@ -48,6 +52,7 @@ class InferencePipeline():
             input_net_size,
             input_net_fps,
             depth_anything_encoder,
+            score_threshold_detectron2,
             batch_size_depth,
             batch_size_detectron2,
         ):
@@ -55,10 +60,11 @@ class InferencePipeline():
         self.input_net_size = input_net_size
         self.input_net_fps = input_net_fps
         self.depth_anything_encoder = depth_anything_encoder
+        self.score_threshold_detectron2 = score_threshold_detectron2
         self.batch_size_depth = batch_size_depth
         self.batch_size_detectron2 = batch_size_detectron2
 
-        self.infer_cfg = OmegaConf.load("./configs/inference/inference.yaml")
+        self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
         seed_everything(seed)
 
@@ -183,6 +189,26 @@ class InferencePipeline():
         predictor.model = self.accelerator.prepare(predictor.model)
 
         return list(predictor(resized_frames))
+    
+    def get_layers_sam2(self, input_video_path, resized_frames, detectron2_output, depth_frames):
+        checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
+        model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+        predictor = build_sam2_video_predictor(model_cfg, checkpoint)
+
+        predictor = self.accelerator.prepare(predictor)
+
+        (
+            min_frame_idx, 
+            max_frame_idx, 
+            instance_sam_output, 
+            foreground_mask
+        ) = get_instance_sam_output(input_video_path, detectron2_output, depth_frames, predictor, self.score_threshold_detectron2)
+
+        return process_layers(resized_frames, 
+                                instance_sam_output, 
+                                foreground_mask, 
+                                min_frame_idx, 
+                                max_frame_idx)
 
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
@@ -213,5 +239,10 @@ class InferencePipeline():
 
         detectron2_output = self.get_detectron2_output(resized_frames)
         print("len(detectron2_output)", len(detectron2_output))
+
+        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
+        print("np.shape(human_frames)", np.shape(human_frames))
+        print("np.shape(occlusion_frames)", np.shape(occlusion_frames))
+        print("np.shape(scene_frames)", np.shape(scene_frames))
 
         video.release()

@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import HUMANS_4D_REPO, PHALP_REPO
+from mimo.configs.paths import HUMANS_4D_REPO, PHALP_REPO
 sys.path.append(HUMANS_4D_REPO)
 sys.path.append(PHALP_REPO)
 
@@ -11,7 +11,7 @@ import numpy as np
 
 from typing import Optional, Tuple
 
-from utils.video_utils import frame_gen_from_video
+from mimo.utils.video_utils import frame_gen_from_video
 
 from phalp.models.hmar.hmr import HMR2018Predictor
 from phalp.trackers.PHALP import PHALP

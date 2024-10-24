@@ -4,13 +4,13 @@ sys.path.append(".")
 import os, cv2, tqdm
 import numpy as np
 
-from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, get_frame_closest_pose, ReposerBatchPredictor, get_kps_image
-from utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
-from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, get_frame_closest_pose, ReposerBatchPredictor, get_kps_image
+from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
+from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
-from configs.paths import APOSE_REF_FOLDER, HUMAN_FOLDER, DATA_FOLDER
+from mimo.configs.paths import APOSE_REF_FOLDER, HUMAN_FOLDER, DATA_FOLDER
 
 def run_on_video(input_path, reposer, a_pose_kps, ref_points_2d, output_folder):
     video = cv2.VideoCapture(input_path)
@@ -74,4 +74,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/get_apose_ref.py
+# python mimo/dataset_preprocessing/get_apose_ref.py

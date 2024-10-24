@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import NVDIFFRAST_REPO, POSES_4DH_FOLDER, RASTERIZED_2D_JOINTS_FOLDER
+from mimo.configs.paths import NVDIFFRAST_REPO, POSES_4DH_FOLDER, RASTERIZED_2D_JOINTS_FOLDER
 sys.path.append(NVDIFFRAST_REPO)
 
 import os, cv2, torch, tqdm
@@ -9,8 +9,8 @@ import numpy as np
 
 import nvdiffrast.torch as dr
 
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from utils.rasterizer_utils import triangles, vertex_attrs
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.rasterizer_utils import triangles, vertex_attrs
 
 
 def save(feature_map, basename, fps, height, width, output_folder):
@@ -93,4 +93,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/rasterizer_2d_joints.py
+# python mimo/dataset_preprocessing/rasterizer_2d_joints.py

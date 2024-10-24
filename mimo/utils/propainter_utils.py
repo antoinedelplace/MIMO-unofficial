@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import PROPAINTER_REPO, CHECKPOINTS_FOLDER
+from mimo.configs.paths import PROPAINTER_REPO, CHECKPOINTS_FOLDER
 sys.path.append(PROPAINTER_REPO)
 
 import torch
@@ -10,7 +10,7 @@ import numpy as np
 import scipy
 from torch.utils.data import DataLoader
 
-from utils.torch_utils import VideoDatasetSlidingWindow
+from mimo.utils.torch_utils import VideoDatasetSlidingWindow
 
 from model.modules.flow_comp_raft import RAFT_bi
 from model.recurrent_flow_completion import RecurrentFlowCompleteNet

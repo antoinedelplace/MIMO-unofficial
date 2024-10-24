@@ -11,9 +11,9 @@ from pathlib import Path, PurePosixPath
 
 from huggingface_hub import hf_hub_download
 
-from utils.torch_utils import VideoDataset
+from mimo.utils.torch_utils import VideoDataset
 
-from configs.paths import IMAGE_ENCODER_FOLDER
+from mimo.configs.paths import IMAGE_ENCODER_FOLDER
 
 
 def download_image_encoder():

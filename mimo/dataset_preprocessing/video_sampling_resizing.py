@@ -3,10 +3,10 @@ sys.path.append(".")
 
 import os, cv2, tqdm
 
-from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
 
-from configs.paths import RAW_FOLDER, RESIZED_FOLDER
+from mimo.configs.paths import RAW_FOLDER, RESIZED_FOLDER
 
 
 def sampling_resizing(frame_gen, input_fps, output_fps, input_size, output_width, output_file=None):
@@ -117,4 +117,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/video_sampling_resizing.py
+# python mimo/dataset_preprocessing/video_sampling_resizing.py

@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import SAM2_REPO, DETECTRON2_REPO, RESIZED_FOLDER, DEPTH_FOLDER, DETECTRON2_FOLDER, HUMAN_FOLDER, SCENE_FOLDER, OCCLUSION_FOLDER, CHECKPOINTS_FOLDER
+from mimo.configs.paths import SAM2_REPO, DETECTRON2_REPO, RESIZED_FOLDER, DEPTH_FOLDER, DETECTRON2_FOLDER, HUMAN_FOLDER, SCENE_FOLDER, OCCLUSION_FOLDER, CHECKPOINTS_FOLDER
 sys.path.append(SAM2_REPO)
 sys.path.append(DETECTRON2_REPO)
 
@@ -15,8 +15,8 @@ from detectron2.structures import Instances
 
 from sam2.build_sam import build_sam2_video_predictor
 
-from utils.video_utils import frame_gen_from_video
-from utils.general_utils import iou, set_memory_limit, try_wrapper, parse_args
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import iou, set_memory_limit, try_wrapper, parse_args
 
 
 def get_index_first_frame_with_character(detectron2_data, score_threshold):
@@ -36,10 +36,8 @@ def get_global_index_biggest_human_in_frame(detectron2_data, i_frame, score_thre
     i_sub = np.argmax(detectron2_data["data_pred_masks"][indexes_humans_at_input_frame].sum(axis=(1, 2)))
     return indexes_humans_at_input_frame[0][i_sub]
 
-def get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data, score_threshold):
+def get_global_indexes_foreground_objects(instance_sam_output, depth, detectron2_data, score_threshold):
     global_indexes = []
-
-    depth = np.array(list(frame_gen_from_video(depth_video)))[:, :, :, 0]
 
     mean_depth_human = np.zeros(len(instance_sam_output))
     for i_frame, sam_frame in enumerate(instance_sam_output):
@@ -130,6 +128,50 @@ def visualize(sam_output, video, input_path, human_output_folder):
 
     video2.release()
 
+def process_layers(frames, 
+                   instance_sam_output, 
+                   foreground_mask, 
+                   min_frame_idx, 
+                   max_frame_idx, 
+                   output_human_file=None,
+                   output_occlusion_file=None,
+                   output_scene_file=None):
+    human_frames = None if output_human_file is not None else []
+    occlusion_frames = None if output_occlusion_file is not None else []
+    scene_frames = None if output_scene_file is not None else []
+
+    num_frames_output = max_frame_idx-min_frame_idx+1
+
+    for i_frame in range(num_frames_output):
+        human_mask = instance_sam_output[i_frame].pred_masks[0].numpy()
+        occlusion_mask = foreground_mask[i_frame]
+
+        human_mask = np.expand_dims(human_mask, axis=-1)
+        occlusion_mask = np.expand_dims(occlusion_mask, axis=-1)
+
+        occlusion_wo_human_mask = occlusion_mask & ~human_mask
+        scene_mask = ~occlusion_mask & ~human_mask
+
+        human_frame = frames[i_frame]*human_mask
+        if output_human_file is not None:
+            output_human_file.write(human_frame)
+        else:
+            human_frames.append(human_frame)
+        
+        occlusion_frame = frames[i_frame]*occlusion_wo_human_mask
+        if output_occlusion_file is not None:
+            output_occlusion_file.write(occlusion_frame)
+        else:
+            occlusion_frames.append(occlusion_frame)
+        
+        scene_frame = frames[i_frame]*scene_mask
+        if output_scene_file is not None:
+            output_scene_file.write(scene_frame)
+        else:
+            scene_frames.append(scene_frame)
+
+    return human_frames, occlusion_frames, scene_frames
+
 def save(
         min_frame_idx, 
         max_frame_idx, 
@@ -140,7 +182,6 @@ def save(
         human_output_folder, 
         scene_output_folder, 
         occlusion_output_folder):
-    num_frames_output = max_frame_idx-min_frame_idx+1
     video.set(cv2.CAP_PROP_POS_FRAMES, min_frame_idx)
 
     basename = os.path.basename(input_path)
@@ -174,46 +215,26 @@ def save(
 
     frames = list(frame_gen_from_video(video))
 
-    for i_frame in range(num_frames_output):
-        human_mask = instance_sam_output[i_frame].pred_masks[0].numpy()
-        occlusion_mask = foreground_mask[i_frame]
-
-        human_mask = np.expand_dims(human_mask, axis=-1)
-        occlusion_mask = np.expand_dims(occlusion_mask, axis=-1)
-
-        occlusion_wo_human_mask = occlusion_mask & ~human_mask
-        scene_mask = ~occlusion_mask & ~human_mask
-
-        output_human_file.write(frames[i_frame]*human_mask)
-        output_occlusion_file.write(frames[i_frame]*occlusion_wo_human_mask)
-        output_scene_file.write(frames[i_frame]*scene_mask)
+    process_layers(frames, 
+                   instance_sam_output, 
+                   foreground_mask, 
+                   min_frame_idx, 
+                   max_frame_idx, 
+                   output_human_file,
+                   output_occlusion_file,
+                   output_scene_file)
 
     output_human_file.release()
     output_scene_file.release()
     output_occlusion_file.release()
 
-def run_on_video(input_path, 
-                 depth_input_folder, 
-                 detectron2_input_folder, 
-                 predictor, 
-                 score_threshold,
-                 human_output_folder, 
-                 scene_output_folder, 
-                 occlusion_output_folder):
-    video = cv2.VideoCapture(input_path)
-
-    basename = os.path.basename(input_path)
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    detectron2_data = dict(np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz")))
-    depth_video = cv2.VideoCapture(os.path.join(depth_input_folder, basename))
-
+def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score_threshold):
     i_first_frame = get_index_first_frame_with_character(detectron2_data, score_threshold)
     print("i_first_frame", i_first_frame)
     i_biggest_human = get_global_index_biggest_human_in_frame(detectron2_data, i_first_frame, score_threshold)
     print("i_biggest_human", i_biggest_human)
+
+    num_frames, width, height = np.shape(depth)
 
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         state = predictor.init_state(input_path)
@@ -240,7 +261,7 @@ def run_on_video(input_path,
 
         #visualize(sam_output, video, input_path, human_output_folder)
 
-        global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth_video, detectron2_data, score_threshold)
+        global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth, detectron2_data, score_threshold)
         print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
 
         foreground_mask = torch.zeros((num_frames, width, height), dtype=bool)
@@ -266,6 +287,26 @@ def run_on_video(input_path,
                 detectron2_data
             )
             print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
+    
+    return min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask
+
+def run_on_video(input_path, 
+                 depth_input_folder, 
+                 detectron2_input_folder, 
+                 predictor, 
+                 score_threshold,
+                 human_output_folder, 
+                 scene_output_folder, 
+                 occlusion_output_folder):
+    video = cv2.VideoCapture(input_path)
+
+    basename = os.path.basename(input_path)
+
+    detectron2_data = dict(np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz")))
+    depth_video = cv2.VideoCapture(os.path.join(depth_input_folder, basename))
+    depth = np.array(list(frame_gen_from_video(depth_video)))[:, :, :, 0]
+    
+    min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask = get_instance_sam_output(input_path, detectron2_data, depth, predictor, score_threshold)
 
     save(min_frame_idx, 
          max_frame_idx, 
@@ -325,4 +366,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/video_tracking_sam2.py
+# python mimo/dataset_preprocessing/video_tracking_sam2.py

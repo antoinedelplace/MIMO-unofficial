@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-from configs.paths import BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, DWPOSE_FOLDER, CHECKPOINTS_FOLDER, ANIMATE_ANYONE_REPO
+from mimo.configs.paths import BASE_MODEL_FOLDER, ANIMATE_ANYONE_FOLDER, DWPOSE_FOLDER, CHECKPOINTS_FOLDER, ANIMATE_ANYONE_REPO
 sys.path.append(ANIMATE_ANYONE_REPO)
 
 import os, cv2
@@ -24,9 +24,9 @@ from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
 from src.dwpose import DWposeDetector
 from src.dwpose.wholebody import Wholebody
 
-from utils.general_utils import argmedian
-from utils.video_utils import frame_from_video
-from utils.torch_utils import VideoDataset
+from mimo.utils.general_utils import argmedian
+from mimo.utils.video_utils import frame_from_video
+from mimo.utils.torch_utils import VideoDataset
 
 def download_base_model():
     os.makedirs(BASE_MODEL_FOLDER, exist_ok=True)
@@ -133,7 +133,7 @@ class ReposerBatchPredictor():
         clip,
         vae
     ):
-        infer_config = OmegaConf.load("./configs/inference/inference.yaml")
+        infer_config = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
         pose_guider = PoseGuider(conditioning_embedding_channels=320).to(
             dtype=torch.float16, device="cuda"

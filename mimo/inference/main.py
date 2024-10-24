@@ -1,8 +1,8 @@
 import sys
 sys.path.append(".")
 
-from utils.general_utils import set_memory_limit, parse_args
-from inference.inference_pipeline import InferencePipeline
+from mimo.utils.general_utils import set_memory_limit, parse_args
+from mimo.inference.inference_pipeline import InferencePipeline
 
 def main(
         input_video_path, 
@@ -14,6 +14,7 @@ def main(
         input_net_size=768,
         input_net_fps=24,
         depth_anything_encoder='vitl',
+        score_threshold_detectron2 = 0.9,
         batch_size_depth=12,
         batch_size_detectron2=32,
     ):
@@ -26,6 +27,7 @@ def main(
         input_net_size=input_net_size,
         input_net_fps=input_net_fps,
         depth_anything_encoder=depth_anything_encoder,
+        score_threshold_detectron2=score_threshold_detectron2,
         batch_size_depth=batch_size_depth,
         batch_size_detectron2=batch_size_detectron2,
     )
@@ -42,4 +44,4 @@ if __name__ == "__main__":
 #    - numa efficiency
 #    - fp16
 
-# accelerate launch inference/main.py -i ../../data/mimo_video_cropped/demo_motion_parkour.mp4
+# accelerate launch mimo/inference/main.py -i ../../data/mimo_video_cropped/demo_motion_parkour.mp4

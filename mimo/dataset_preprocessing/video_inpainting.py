@@ -3,11 +3,11 @@ sys.path.append(".")
 
 import os, cv2, tqdm
 
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from utils.propainter_utils import BatchPredictor
-from utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.propainter_utils import BatchPredictor
+from mimo.utils.video_utils import frame_gen_from_video
 
-from configs.paths import SCENE_FOLDER, FILLED_SCENE_FOLDER
+from mimo.configs.paths import SCENE_FOLDER, FILLED_SCENE_FOLDER
 
 
 def run_on_video(input_path, predictor, output_folder):
@@ -69,4 +69,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/video_inpainting.py
+# python mimo/dataset_preprocessing/video_inpainting.py

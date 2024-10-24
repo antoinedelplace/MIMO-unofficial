@@ -4,10 +4,10 @@ sys.path.append(".")
 import os, cv2, tqdm
 import numpy as np
 
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 
-from configs.paths import APOSE_REF_FOLDER, APOSE_CLIP_EMBEDS_FOLDER
+from mimo.configs.paths import APOSE_REF_FOLDER, APOSE_CLIP_EMBEDS_FOLDER
 
 
 def run_on_image(input_path, clip, output_folder):
@@ -55,4 +55,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/clip_embedding.py
+# python mimo/dataset_preprocessing/clip_embedding.py

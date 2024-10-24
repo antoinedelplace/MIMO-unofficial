@@ -4,11 +4,11 @@ sys.path.append(".")
 import os, cv2, tqdm
 import numpy as np
 
-from utils.video_utils import frame_gen_from_video
-from utils.general_utils import try_wrapper, set_memory_limit, parse_args
-from utils.vae_encoding_utils import download_vae, VaeBatchPredictor
+from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
-from configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER, APOSE_REF_FOLDER
+from mimo.configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER, APOSE_REF_FOLDER
 
 
 def visualize(vae, latent, video, input_path, output_folder):
@@ -114,4 +114,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python dataset_preprocessing/vae_encoding.py
+# python mimo/dataset_preprocessing/vae_encoding.py

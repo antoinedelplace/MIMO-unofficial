@@ -11,9 +11,9 @@ from pathlib import Path, PurePosixPath
 
 from huggingface_hub import hf_hub_download
 
-from utils.torch_utils import VideoDataset, NpzDataset
+from mimo.utils.torch_utils import VideoDataset, NpzDataset
 
-from configs.paths import VAE_FOLDER
+from mimo.configs.paths import VAE_FOLDER
 
 
 def download_vae():
