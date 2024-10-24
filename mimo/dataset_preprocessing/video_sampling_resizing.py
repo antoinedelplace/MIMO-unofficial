@@ -45,7 +45,7 @@ def sampling_resizing(frame_gen, input_fps, output_fps, input_size, output_width
     
     return output_frames
 
-def process_video(input_path, output_size, output_fps, output_folder):
+def process_video(input_path, output_size, output_fps, input_fps, output_folder):
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -58,6 +58,9 @@ def process_video(input_path, output_size, output_fps, output_folder):
     # print("height", height)
     # print("frames_per_second", frames_per_second)
     # print("num_frames", num_frames)
+
+    if input_fps is not None:
+        frames_per_second = input_fps
 
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename),
@@ -93,6 +96,7 @@ def main(
         output_folder=RESIZED_FOLDER,
         output_size=768,
         output_fps=24,
+        input_fps=None,
         cpu_memory_limit_gb=60
         ):
     os.makedirs(output_folder, exist_ok=True)
@@ -110,7 +114,7 @@ def main(
             continue
 
         input_path = os.path.join(input_folder, filename)
-        try_wrapper(lambda: process_video(input_path, output_size, output_fps, output_folder), filename, log_path)
+        try_wrapper(lambda: process_video(input_path, output_size, output_fps, input_fps, output_folder), filename, log_path)
 
 
 if __name__ == "__main__":
