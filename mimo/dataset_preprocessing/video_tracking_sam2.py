@@ -234,6 +234,7 @@ def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score
     i_biggest_human = get_global_index_biggest_human_in_frame(detectron2_data, i_first_frame, score_threshold)
     print("i_biggest_human", i_biggest_human)
 
+    depth = depth[:, :, :, 0]
     num_frames, width, height = np.shape(depth)
 
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
@@ -288,6 +289,8 @@ def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score
             )
             print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
     
+    predictor.reset_state(state)
+    
     return min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask
 
 def run_on_video(input_path, 
@@ -304,7 +307,9 @@ def run_on_video(input_path,
 
     detectron2_data = dict(np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz")))
     depth_video = cv2.VideoCapture(os.path.join(depth_input_folder, basename))
-    depth = np.array(list(frame_gen_from_video(depth_video)))[:, :, :, 0]
+
+    detectron2_data["data_frame_index"] = detectron2_data["data_frame_index"].astype(np.int32)
+    depth = np.array(list(frame_gen_from_video(depth_video)))
     
     min_frame_idx, max_frame_idx, instance_sam_output, foreground_mask = get_instance_sam_output(input_path, detectron2_data, depth, predictor, score_threshold)
 

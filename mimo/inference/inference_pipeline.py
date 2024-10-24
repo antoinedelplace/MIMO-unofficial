@@ -40,7 +40,7 @@ from mimo.utils.detectron2_utils import DetectronBatchPredictor
 
 from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing
 from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
-from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settings
+from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settings, post_processing_detectron2
 from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers
 
 class InferencePipeline():
@@ -188,14 +188,14 @@ class InferencePipeline():
 
         predictor.model = self.accelerator.prepare(predictor.model)
 
-        return list(predictor(resized_frames))
+        return post_processing_detectron2(list(predictor(resized_frames)))
     
     def get_layers_sam2(self, input_video_path, resized_frames, detectron2_output, depth_frames):
         checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
         model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
         predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
-        predictor = self.accelerator.prepare(predictor)
+        # predictor = self.accelerator.prepare(predictor)
 
         (
             min_frame_idx, 
@@ -238,7 +238,11 @@ class InferencePipeline():
         print("np.shape(depth_frames)", np.shape(depth_frames))
 
         detectron2_output = self.get_detectron2_output(resized_frames)
-        print("len(detectron2_output)", len(detectron2_output))
+        print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']))
+        print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']))
+        print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']))
+        print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']))
+        print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']))
 
         human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
         print("np.shape(human_frames)", np.shape(human_frames))

@@ -78,7 +78,7 @@ def visualize(predictions, video, input_path, output_folder):
 
     video2.release()
 
-def save(outputs, output_path):
+def post_processing_detectron2(outputs, output_path=None):
     data_frame_index = []
     data_pred_boxes = []
     data_scores = []
@@ -92,18 +92,25 @@ def save(outputs, output_path):
         data_pred_classes.append(outputs[i].pred_classes.cpu().numpy())
         data_pred_masks.append(outputs[i].pred_masks.cpu().numpy())
 
-    data_frame_index = np.concatenate(data_frame_index)
+    data_frame_index = np.concatenate(data_frame_index, dtype=np.int32)
     data_pred_boxes = np.concatenate(data_pred_boxes)
     data_scores = np.concatenate(data_scores)
     data_pred_classes = np.concatenate(data_pred_classes)
     data_pred_masks = np.concatenate(data_pred_masks)
 
-    np.savez_compressed(output_path, 
-                        data_frame_index=data_frame_index, 
-                        data_pred_boxes=data_pred_boxes,
-                        data_scores=data_scores,
-                        data_pred_classes=data_pred_classes,
-                        data_pred_masks=data_pred_masks)
+    if output_path is not None:
+        np.savez_compressed(output_path, 
+                            data_frame_index=data_frame_index, 
+                            data_pred_boxes=data_pred_boxes,
+                            data_scores=data_scores,
+                            data_pred_classes=data_pred_classes,
+                            data_pred_masks=data_pred_masks)
+    
+    return {"data_frame_index":data_frame_index, 
+            "data_pred_boxes":data_pred_boxes,
+            "data_scores":data_scores,
+            "data_pred_classes":data_pred_classes,
+            "data_pred_masks":data_pred_masks}
 
 def run_on_video(input_path, predictor, output_folder):
     video = cv2.VideoCapture(input_path)
@@ -116,7 +123,7 @@ def run_on_video(input_path, predictor, output_folder):
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
 
     # visualize(outputs, video, input_path, output_folder)
-    save(outputs, output_path)
+    post_processing_detectron2(outputs, output_path)
 
     video.release()
 

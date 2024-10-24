@@ -5,6 +5,7 @@ import torch
 import resource
 import argparse
 import inspect
+import traceback
 
 def time_it(func):
     @wraps(func)
@@ -21,9 +22,11 @@ def try_wrapper(function, filename, log_path):
     try:
         return function()
     except Exception as e:
+        error_trace = traceback.format_exc()
+
         with open(log_path, 'a') as log_file:
-            log_file.write(f"{filename}: {str(e)}\n")
-        print(f"Error {filename}: {str(e)}\n")
+            log_file.write(f"{filename}: {error_trace}\n")
+        print(f"Error in {filename}:\n{error_trace}")
 
 def iou(mask1, mask2):
     """
@@ -64,15 +67,15 @@ def argmedian(x, axis=None):
 def parse_args(main_function):
     parser = argparse.ArgumentParser()
 
-    used_short_versions = set()
+    used_short_versions = set("h")
 
     signature = inspect.signature(main_function)
     for param_name, param in signature.parameters.items():
         short_version = param_name[0]
-        if short_version in used_short_versions:
+        if short_version in used_short_versions or not short_version.isalpha():
             for char in param_name[1:]:
                 short_version = char
-                if short_version not in used_short_versions:
+                if char.isalpha() and short_version not in used_short_versions:
                     break
             else:
                 short_version = None

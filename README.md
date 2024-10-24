@@ -54,7 +54,7 @@ See `configs/paths.py`
 - [sam2.1_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt)
 
 ### Extra steps
-- For `dataset_preprocessing/pose_estimation_4DH.py`
+- For `mimo/dataset_preprocessing/pose_estimation_4DH.py`
     - Download SMPL model and put it in `MIMO-unofficial` and in `MIMO-unofficial/data`
     [basicModel_neutral_lbs_10_207_0_v1.0.0.pkl](https://huggingface.co/spaces/brjathu/HMR2.0/resolve/e5201da358ccbc04f4a5c4450a302fcb9de571dd/data/smpl/basicModel_neutral_lbs_10_207_0_v1.0.0.pkl)
 
@@ -73,7 +73,7 @@ See `configs/paths.py`
     in `PHALP/phalp/trackers/PHALP.py` line 264:
     Remove `joblib.dump(final_visuals_dic, pkl_path, compress=3)`
 
-- For `dataset_preprocessing/get_apose_ref.py`
+- For `mimo/dataset_preprocessing/get_apose_ref.py`
     - If you need DWPose to extract 2D pose from an image
     ```bash
     pip install -U openmim
@@ -88,7 +88,7 @@ See `configs/paths.py`
     from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel
     ```
 
-- For `training/main.py`
+- For `mimo/training/main.py`
     - in `AnimateAnyone/src/models/mutual_self_attention.py` line 48:
     ```bash
         self.register_reference_hooks(
@@ -107,17 +107,17 @@ See `configs/paths.py`
 
 ## Run scripts
 ### Dataset Preprocessing
-1. `dataset_preprocessing/video_sampling_resizing.py`
-1. `dataset_preprocessing/remove_duplicate_videos.py`
-1. `dataset_preprocessing/human_detection_detectron2.py`
-1. `dataset_preprocessing/depth_estimation.py`
-1. `dataset_preprocessing/video_tracking_sam2.py`
-1. `dataset_preprocessing/video_inpainting.py`
-1. `dataset_preprocessing/get_apose_ref.py`
-1. `dataset_preprocessing/vae_encoding.py`
-1. `dataset_preprocessing/clip_embedding.py`
-1. `dataset_preprocessing/pose_estimation_4DH.py`
-1. `dataset_preprocessing/rasterizer_2d_joints.py`
+1. `mimo/dataset_preprocessing/video_sampling_resizing.py`
+1. `mimo/dataset_preprocessing/remove_duplicate_videos.py`
+1. `mimo/dataset_preprocessing/human_detection_detectron2.py`
+1. `mimo/dataset_preprocessing/depth_estimation.py`
+1. `mimo/dataset_preprocessing/video_tracking_sam2.py`
+1. `mimo/dataset_preprocessing/video_inpainting.py`
+1. `mimo/dataset_preprocessing/get_apose_ref.py`
+1. `mimo/dataset_preprocessing/vae_encoding.py`
+1. `mimo/dataset_preprocessing/clip_embedding.py`
+1. `mimo/dataset_preprocessing/pose_estimation_4DH.py`
+1. `mimo/dataset_preprocessing/rasterizer_2d_joints.py`
 
 
 ## Note
