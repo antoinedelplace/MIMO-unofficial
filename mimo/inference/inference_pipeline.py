@@ -64,6 +64,8 @@ class InferencePipeline():
             batch_size_detectron2,
             batch_size_propainter,
             batch_size_reposer,
+            batch_size_clip,
+            batch_size_vae,
         ):
         self.num_workers = num_workers
         self.input_net_size = input_net_size
@@ -75,6 +77,8 @@ class InferencePipeline():
         self.batch_size_detectron2 = batch_size_detectron2
         self.batch_size_propainter = batch_size_propainter
         self.batch_size_reposer = batch_size_reposer
+        self.batch_size_clip = batch_size_clip
+        self.batch_size_vae = batch_size_vae
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
@@ -248,6 +252,28 @@ class InferencePipeline():
 
         return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d)
 
+    def clip_apose(self, apose_ref):
+        download_image_encoder()
+
+        clip = CLIPBatchPredictor(self.batch_size_clip, self.num_workers)
+
+        clip.image_enc = self.accelerator.prepare(clip.image_enc)
+
+        return list(clip([apose_ref]))[0]
+    
+    def vae_encoding(self, scene_frames, occlusion_frames, resized_frames, apose_ref):
+        download_vae()
+
+        vae = VaeBatchPredictor(self.batch_size_vae, self.num_workers)
+
+        vae.vae = self.accelerator.prepare(vae.vae)
+
+        scene_frames = np.concatenate(list(vae.encode(scene_frames)))
+        occlusion_frames = np.concatenate(list(vae.encode(occlusion_frames)))
+        resized_frames = np.concatenate(list(vae.encode(resized_frames)))
+        apose_ref = np.concatenate(list(vae.encode([apose_ref])))
+
+        return scene_frames, occlusion_frames, resized_frames, apose_ref
 
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
@@ -295,6 +321,15 @@ class InferencePipeline():
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
 
         apose_ref = self.get_apose_ref(resized_frames)
+        print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
+
+        clip_embeddings = self.clip_apose(apose_ref)
+        print("np.shape(clip_embeddings)", np.shape(clip_embeddings), type(clip_embeddings))
+
+        scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
+        print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
+        print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
+        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
 
         video.release()

@@ -24,6 +24,8 @@ def main(
         batch_size_detectron2=32,
         batch_size_propainter=128,
         batch_size_reposer=24,
+        batch_size_clip=16,
+        batch_size_vae=16,
     ):
     set_memory_limit(cpu_memory_limit_gb)
 
@@ -40,6 +42,8 @@ def main(
         batch_size_detectron2=batch_size_detectron2,
         batch_size_propainter=batch_size_propainter,
         batch_size_reposer=batch_size_reposer,
+        batch_size_clip=batch_size_clip,
+        batch_size_vae=batch_size_vae,
     )
 
     pipe(input_video_path, output_video_path)
