@@ -90,17 +90,15 @@ def get_frame_with_median_mask(video, frame_gen):
 
     return frame_from_video(video, index)
 
-def get_frame_closest_pose(frame_gen, ref_points_2d):
+def get_frame_closest_pose(frame_gen, ref_points_2d, dw_pose_detector):
     distance = np.infty
     frame = None
-
-    detector = CustomDWposeDetector()
 
     ref_points_2d_norm = (ref_points_2d['bodies']['candidate']-np.mean(ref_points_2d['bodies']['candidate']))/np.std(ref_points_2d['bodies']['candidate'])
 
     for i_frame, image in enumerate(frame_gen):
         input_image_pil = Image.fromarray(image[:, :, ::-1])
-        _, _, points_2d = detector(input_image_pil)
+        _, _, points_2d = dw_pose_detector(input_image_pil)
 
         points_2d_norm = (points_2d['bodies']['candidate']-np.mean(points_2d['bodies']['candidate']))/np.std(points_2d['bodies']['candidate'])
         new_distance = np.sum(np.abs(points_2d_norm-ref_points_2d_norm))
@@ -110,13 +108,11 @@ def get_frame_closest_pose(frame_gen, ref_points_2d):
     
     return frame
 
-def get_kps_image(input_image_path):
-    detector = CustomDWposeDetector()
-
+def get_kps_image(input_image_path, dw_pose_detector):
     input_image = cv2.imread(input_image_path)
     input_image_pil = Image.fromarray(input_image[:, :, ::-1])
 
-    result_pil, score, points_2d = detector(input_image_pil)
+    result_pil, score, points_2d = dw_pose_detector(input_image_pil)
 
     return np.array(result_pil), points_2d
 
