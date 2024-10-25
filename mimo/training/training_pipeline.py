@@ -35,6 +35,8 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
 
+from mimo.utils.apose_ref_utils import download_base_model, download_anyone
+
 from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
 from mimo.training.training_dataset import TrainingDataset, collate_fn
 from mimo.training.models import Net
@@ -66,6 +68,9 @@ class TrainingPipeline:
             seed_everything(self.cfg.seed)
 
     def get_model(self):
+        download_base_model()
+        download_anyone()
+
         reference_unet = UNet2DConditionModel.from_pretrained(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
             use_safetensors=True
