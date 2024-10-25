@@ -26,14 +26,9 @@ def save(feature_map, basename, fps, height, width, output_folder):
         output_file.write((frame * 255).clip(min=0, max=255).astype(np.uint8))
 
     output_file.release()
-    
-def run_on_video(input_path, fps, height, width, output_folder):
-    basename = os.path.basename(input_path)
 
+def get_rasterized_joints_2d(data_joints_2d, height, width):
     rast_ctx = dr.RasterizeCudaContext()
-
-    outputs = dict(np.load(input_path))
-    data_joints_2d = outputs["data_joints_2d"]  # Shape: [n_batch, n_joints, 2]
 
     n_batch, n_joints, _ = data_joints_2d.shape
 
@@ -59,7 +54,15 @@ def run_on_video(input_path, fps, height, width, output_folder):
     interpolated_features = interpolated_features * mask
 
     # Resulting interpolated 2D feature map (n_batch, height, width)
-    feature_map = interpolated_features.squeeze().cpu().numpy()
+    return interpolated_features.squeeze().cpu().numpy()
+    
+def run_on_video(input_path, fps, height, width, output_folder):
+    basename = os.path.basename(input_path)
+
+    outputs = dict(np.load(input_path))
+    data_joints_2d = outputs["data_joints_2d"]  # Shape: [n_batch, n_joints, 2]
+
+    feature_map = get_rasterized_joints_2d(data_joints_2d, height, width)
 
     save(feature_map, basename, fps, height, width, output_folder)
 

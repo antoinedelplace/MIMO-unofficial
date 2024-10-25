@@ -50,6 +50,8 @@ from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_outp
 from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
 from mimo.dataset_preprocessing.get_apose_ref import get_apose_ref_img
 from mimo.dataset_preprocessing.pose_estimation_4DH import get_cfg, get_data_from_4DH
+from mimo.dataset_preprocessing.rasterizer_2d_joints import get_rasterized_joints_2d
+
 
 class InferencePipeline():
     def __init__(  # See default values in inference/main.py
@@ -282,7 +284,6 @@ class InferencePipeline():
 
         return data_4DH["data_joints_2d"]
 
-
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
 
@@ -331,6 +332,9 @@ class InferencePipeline():
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
 
         remove_tmp_dir(input_video_path)
+
+        joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
+        print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
 
         scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
