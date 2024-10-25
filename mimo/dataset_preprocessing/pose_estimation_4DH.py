@@ -123,20 +123,42 @@ def get_data_from_4DH(input_path, phalp_tracker):
 
     n_frames = len(outputs)
     n_joints = len(SMPL_bones)
+    n_betas = 10
 
     data_poses = np.zeros((n_frames, n_joints, 3))
     data_cam_trans = np.zeros((n_frames, 3))
-    data_betas = np.zeros((n_frames, 10))
+    data_betas = np.zeros((n_frames, n_betas))
     data_joints_3d = np.zeros((n_frames, 45, 3))
     data_joints_2d = np.zeros((n_frames, 45, 2))
 
+    # If no data detected, get the data at the previous frame
+    smpl_temp = {
+        "global_orient": np.zeros((3, 3)),
+        "body_pose": np.zeros((n_joints-1, 3, 3)),
+        "betas": np.zeros((n_betas)),
+    }
+    camera_temp = np.zeros((3))
+    joints_3d_temp = np.zeros((45, 3))
+    joints_2d_temp = np.zeros((45, 2))
     for i in range(len(outputs)):
-        data_poses[i, 0, :] = matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["global_orient"])).numpy()
-        data_poses[i, 1:, :] = matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["body_pose"])).numpy()
-        data_cam_trans[i] = outputs[i]["camera"][0]
-        data_betas[i] = outputs[i]["smpl"][0]["betas"]
-        data_joints_3d[i] = outputs[i]["3d_joints"][0]
-        data_joints_2d[i] = outputs[i]["2d_joints"][0].reshape(-1, 2)
+        if len(outputs[i]["smpl"]) > 0:
+            smpl_temp = outputs[i]["smpl"][0]
+
+        data_poses[i, 0, :] = matrix_to_axis_angle(torch.from_numpy(smpl_temp["global_orient"])).numpy()
+        data_poses[i, 1:, :] = matrix_to_axis_angle(torch.from_numpy(smpl_temp["body_pose"])).numpy()
+        data_betas[i] = smpl_temp["betas"]
+
+        if len(outputs[i]["camera"]) > 0:
+            camera_temp = outputs[i]["camera"][0]
+        data_cam_trans[i] = camera_temp
+
+        if len(outputs[i]["3d_joints"]) > 0:
+            joints_3d_temp = outputs[i]["3d_joints"][0]
+        data_joints_3d[i] = joints_3d_temp
+
+        if len(outputs[i]["2d_joints"]) > 0:
+            joints_2d_temp = outputs[i]["2d_joints"][0].reshape(-1, 2)
+        data_joints_2d[i] = joints_2d_temp
     
     return {"data_poses": data_poses,
             "data_cam_trans": data_cam_trans,
