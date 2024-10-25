@@ -40,7 +40,7 @@ from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
 from mimo.utils.propainter_utils import ProPainterBatchPredictor
-from mimo.utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, ReposerBatchPredictor, get_kps_image
+from mimo.utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, ReposerBatchPredictor, get_kps_image, CustomDWposeDetector
 from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.utils.pose_4DH_utils import HMR2_4dhuman
@@ -244,15 +244,16 @@ class InferencePipeline():
         download_anyone()
         download_dwpose()
 
+        dw_pose_detector = CustomDWposeDetector()
         vae = VaeBatchPredictor(self.batch_size_reposer, self.num_workers)
         clip = CLIPBatchPredictor(self.batch_size_reposer, self.num_workers)
         reposer = ReposerBatchPredictor(self.batch_size_reposer, self.num_workers, clip, vae)
 
-        reposer.pipe = self.accelerator.prepare(reposer.pipe)
+        reposer.pipe, dw_pose_detector = self.accelerator.prepare(reposer.pipe, dw_pose_detector)
 
-        a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path)
+        a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path, dw_pose_detector)
 
-        return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d)
+        return get_apose_ref_img(resized_frames, reposer, dw_pose_detector, a_pose_kps, ref_points_2d)
 
     def clip_apose(self, apose_ref):
         download_image_encoder()
@@ -288,7 +289,7 @@ class InferencePipeline():
 
     def __call__(self, input_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
-        
+
         video = cv2.VideoCapture(input_video_path)
 
         basename = os.path.basename(input_video_path)
