@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
-from mimo.utils.rotation_conversations_utils import matrix_to_quaternion, matrix_to_axis_angle, matrix_to_euler_angles, euler_angles_to_matrix, axis_angle_to_matrix, quaternion_to_matrix, axis_angle_to_quaternion, quaternion_multiply
+from mimo.utils.rotation_conversions_utils import matrix_to_quaternion, matrix_to_axis_angle, matrix_to_euler_angles, euler_angles_to_matrix, axis_angle_to_matrix, quaternion_to_matrix, axis_angle_to_quaternion, quaternion_multiply
 
 Openpose_25_bones = ["Nose",           # 0
                      "Neck",           # 1
