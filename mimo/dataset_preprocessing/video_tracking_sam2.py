@@ -245,7 +245,7 @@ def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score
                                         obj_id=detectron2_data["data_pred_classes"][i_biggest_human],
                                         box=detectron2_data["data_pred_boxes"][i_biggest_human])
 
-        sam_output = list(predictor.propagate_in_video(state, start_frame_idx=0))
+        sam_output = [(out_frame_idx, out_obj_ids, out_mask_logits.cpu()) for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state, start_frame_idx=0)]
     
         out_frames_idx = [x[0] for x in sam_output]
         min_frame_idx = min(out_frames_idx)
@@ -258,8 +258,9 @@ def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score
         for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
             instance_sam_output[out_frame_idx] = instance_sam_output[out_frame_idx].cat([Instances((width, height), 
                                         pred_classes=torch.tensor(out_obj_ids, dtype=torch.int8), 
-                                        pred_masks=(out_mask_logits > 0)[0].to(torch.bool).cpu())])
+                                        pred_masks=(out_mask_logits > 0)[0].to(torch.bool))])
 
+        del sam_output
         #visualize(sam_output, video, input_path, human_output_folder)
 
         global_indexes_foreground_objects = get_global_indexes_foreground_objects(instance_sam_output, depth, detectron2_data, score_threshold)
@@ -276,11 +277,11 @@ def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score
                                             obj_id=detectron2_data["data_pred_classes"][i_global_indexes],
                                             box=detectron2_data["data_pred_boxes"][i_global_indexes])
 
-            sam_output = list(predictor.propagate_in_video(state, start_frame_idx=0))
+            sam_output = [(out_frame_idx, out_obj_ids, out_mask_logits.cpu()) for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state, start_frame_idx=0)]
             # visualize(sam_output, video, f"{i_global_indexes}_{basename}", human_output_folder)
 
             for out_frame_idx, out_obj_ids, out_mask_logits in sam_output:
-                foreground_mask[out_frame_idx] += (out_mask_logits > 0).squeeze().to(torch.bool).cpu()
+                foreground_mask[out_frame_idx] += (out_mask_logits > 0).squeeze().to(torch.bool)
 
             global_indexes_foreground_objects = get_global_indexes_filtered_already_in_mask(
                 global_indexes_foreground_objects, 
@@ -288,6 +289,8 @@ def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score
                 detectron2_data
             )
             print("len(global_indexes_foreground_objects)", len(global_indexes_foreground_objects))
+
+            del sam_output
     
     predictor.reset_state(state)
     
