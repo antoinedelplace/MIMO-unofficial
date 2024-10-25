@@ -1,10 +1,14 @@
+import sys
+sys.path.append(".")
+
 import torch
 import copy
 import numpy as np
-import pytorch3d.transforms as pt3d
 
 import matplotlib.pyplot as plt
 from matplotlib import animation
+
+from mimo.utils.rotation_conversations_utils import matrix_to_quaternion, matrix_to_axis_angle, matrix_to_euler_angles, euler_angles_to_matrix, axis_angle_to_matrix, quaternion_to_matrix, axis_angle_to_quaternion, quaternion_multiply
 
 Openpose_25_bones = ["Nose",           # 0
                      "Neck",           # 1
@@ -213,14 +217,14 @@ class Object3D():
         Returns : torch.Tensor of shape (4), xyzw quaternion
         """
         normalized_matrix = self.global_matrix[:3, :3].clone() / self.get_global_scale().repeat(3,1)
-        return pt3d.matrix_to_quaternion(normalized_matrix)
+        return matrix_to_quaternion(normalized_matrix)
 
     def get_global_rotation_axisangle(self):
         """
         Returns : torch.Tensor of shape (3), xyz axis angle
         """
         normalized_matrix = self.global_matrix[:3, :3].clone() / self.get_global_scale().repeat(3,1)
-        return pt3d.rotation_conversions.matrix_to_axis_angle(normalized_matrix)
+        return matrix_to_axis_angle(normalized_matrix)
 
     def get_global_rotation_euler(self, order="xyz"):
         """
@@ -231,9 +235,9 @@ class Object3D():
         normalized_matrix = self.global_matrix[:3, :3].clone() / self.get_global_scale().repeat(3,1)
 
         if order.lower() == order:
-            return pt3d.matrix_to_euler_angles(normalized_matrix, order.upper()[::-1]).flip(0)
+            return matrix_to_euler_angles(normalized_matrix, order.upper()[::-1]).flip(0)
         elif order.upper() == order:
-            return pt3d.matrix_to_euler_angles(normalized_matrix, order)
+            return matrix_to_euler_angles(normalized_matrix, order)
         else:
             raise Exception("Extrinsic (lowercase xyz) and intrinsic (uppercase XYZ) euler angles cannot be mixed.")
 
@@ -242,14 +246,14 @@ class Object3D():
         Returns : torch.Tensor of shape (4), xyzw quaternion
         """
         normalized_matrix = self.local_matrix[:3, :3].clone() / self.get_local_scale().repeat(3,1)
-        return pt3d.matrix_to_quaternion(normalized_matrix)
+        return matrix_to_quaternion(normalized_matrix)
 
     def get_local_rotation_axisangle(self):
         """
         Returns : torch.Tensor of shape (3), xyz axis angle
         """
         normalized_matrix = self.local_matrix[:3, :3].clone() / self.get_local_scale().repeat(3,1)
-        return pt3d.rotation_conversions.matrix_to_axis_angle(normalized_matrix)
+        return matrix_to_axis_angle(normalized_matrix)
 
     def get_local_rotation_euler(self, order="xyz"):
         """
@@ -259,9 +263,9 @@ class Object3D():
         """
         normalized_matrix = self.local_matrix[:3, :3].clone() / self.get_local_scale().repeat(3,1)
         if order.lower() == order:
-            return pt3d.matrix_to_euler_angles(normalized_matrix, order.upper()[::-1]).flip(0)
+            return matrix_to_euler_angles(normalized_matrix, order.upper()[::-1]).flip(0)
         elif order.upper() == order:
-            return pt3d.matrix_to_euler_angles(normalized_matrix, order)
+            return matrix_to_euler_angles(normalized_matrix, order)
         else:
             raise Exception("Extrinsic (lowercase xyz) and intrinsic (uppercase XYZ) euler angles cannot be mixed.")
 
@@ -273,20 +277,20 @@ class Object3D():
                                     or X, Y, Z (for intrinsic euler angles)
         """
         if order.lower() == order:
-            rotation = pt3d.euler_angles_to_matrix(rotation.flip(0), order.upper()[::-1])
+            rotation = euler_angles_to_matrix(rotation.flip(0), order.upper()[::-1])
         elif order.upper() == order:
-            rotation = pt3d.euler_angles_to_matrix(rotation, order)
+            rotation = euler_angles_to_matrix(rotation, order)
         else:
             raise Exception("Extrinsic (lowercase xyz) and intrinsic (uppercase XYZ) euler angles cannot be mixed.")
 
         self.set_local_rotation_matrix(rotation)
 
     def set_local_rotation_axisangle(self, rotation):
-        rotation = pt3d.axis_angle_to_matrix(rotation)
+        rotation = axis_angle_to_matrix(rotation)
         self.set_local_rotation_matrix(rotation)
 
     def set_local_rotation_quaternion(self, rotation):
-        rotation = pt3d.quaternion_to_matrix(rotation)
+        rotation = quaternion_to_matrix(rotation)
         self.set_local_rotation_matrix(rotation)
     
     def set_local_rotation_matrix(self, rotation):
@@ -307,11 +311,11 @@ class Object3D():
         self.set_local_position(self.get_local_position() + translation)
 
     def apply_local_rotation_axisangle(self, axisangle):
-        quat = pt3d.rotation_conversions.axis_angle_to_quaternion(axisangle)
+        quat = axis_angle_to_quaternion(axisangle)
         self.apply_local_rotation_quaternion(quat)
 
     def apply_local_rotation_quaternion(self, quaternion):
-        final_quat = pt3d.rotation_conversions.quaternion_multiply(self.get_local_rotation_quaternion(), quaternion)
+        final_quat = quaternion_multiply(self.get_local_rotation_quaternion(), quaternion)
         self.set_local_rotation_quaternion(final_quat)
 
     def lookat(self, position, up=torch.Tensor([0, 1, 0]), forward=torch.Tensor([0, 0, 1])):
