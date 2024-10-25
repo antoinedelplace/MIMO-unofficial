@@ -104,6 +104,11 @@ See `configs/paths.py`
         )
     ```
 
+    - in `AnimateAnyone/src/models/unet_2d_blocks.py` line 9:
+    ```bash
+    from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel
+    ```
+
 
 ## Run scripts
 ### Dataset Preprocessing
