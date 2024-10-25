@@ -4,12 +4,11 @@ sys.path.append(".")
 import os, cv2, torch, tqdm
 import numpy as np
 
-import pytorch3d.transforms as pt3d
-
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
 from mimo.utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
 from mimo.utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Openpose_25_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
+from mimo.utils.rotation_conversions_utils import matrix_to_axis_angle
 
 from mimo.configs.paths import HUMAN_FOLDER, POSES_4DH_FOLDER
 
@@ -132,8 +131,8 @@ def get_data_from_4DH(input_path, phalp_tracker):
     data_joints_2d = np.zeros((n_frames, 45, 2))
 
     for i in range(len(outputs)):
-        data_poses[i, 0, :] = pt3d.rotation_conversions.matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["global_orient"])).numpy()
-        data_poses[i, 1:, :] = pt3d.rotation_conversions.matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["body_pose"])).numpy()
+        data_poses[i, 0, :] = matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["global_orient"])).numpy()
+        data_poses[i, 1:, :] = matrix_to_axis_angle(torch.from_numpy(outputs[i]["smpl"][0]["body_pose"])).numpy()
         data_cam_trans[i] = outputs[i]["camera"][0]
         data_betas[i] = outputs[i]["smpl"][0]["betas"]
         data_joints_3d[i] = outputs[i]["3d_joints"][0]
