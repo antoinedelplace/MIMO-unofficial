@@ -1,3 +1,6 @@
+import sys
+sys.path.append(".")
+
 import time
 from functools import wraps
 import numpy as np
@@ -6,6 +9,9 @@ import resource
 import argparse
 import inspect
 import traceback
+import GPUtil
+
+from mimo.utils.torch_utils import free_gpu_memory
 
 def time_it(func):
     @wraps(func)
@@ -22,6 +28,8 @@ def try_wrapper(function, filename, log_path):
     try:
         return function()
     except Exception as e:
+        free_gpu_memory()
+        
         error_trace = traceback.format_exc()
 
         with open(log_path, 'a') as log_file:
@@ -97,3 +105,24 @@ def parse_args(main_function):
     args = parser.parse_args()
 
     return args
+
+def get_gpu_memory_usage():
+    gpus = GPUtil.getGPUs()
+    if not gpus:
+        print("No GPUs found.")
+        return []
+    
+    gpu_memory_info = []
+    for gpu in gpus:
+        memory_used_gb = gpu.memoryUsed / 1024  # Convert MB to GB
+        memory_total_gb = gpu.memoryTotal / 1024  # Convert MB to GB
+        gpu_memory_info.append({
+            'id': gpu.id,
+            'name': gpu.name,
+            'memory_used_gb': memory_used_gb,
+            'memory_total_gb': memory_total_gb
+        })
+
+        print(f"GPU {gpu.id} ({gpu.name}): {memory_used_gb} GB / {memory_total_gb} GB")
+    
+    return gpu_memory_info

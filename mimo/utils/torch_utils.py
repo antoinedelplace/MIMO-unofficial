@@ -1,8 +1,12 @@
 import sys
 sys.path.append(".")
 
-from numpy import ndarray
+import gc
+
+import torch
 from torch.utils.data import Dataset
+
+from numpy import ndarray
 import numpy as np
 import cv2
 
@@ -67,3 +71,10 @@ class VideoDatasetSlidingWindow(Dataset):
 
     def __len__(self):
         return self.num_windows
+    
+def free_gpu_memory(accelerator=None):
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    if accelerator is not None:
+        accelerator.free_memory()

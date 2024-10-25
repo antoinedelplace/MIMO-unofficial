@@ -41,3 +41,5 @@ bitsandbytes
 
 mlflow
 h5py
+
+gputil

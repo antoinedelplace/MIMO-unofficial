@@ -34,6 +34,8 @@ from sam2.build_sam import build_sam2_video_predictor
 from mimo.training.training_utils import get_torch_weight_dtype
 from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir
 
+from mimo.utils.general_utils import get_gpu_memory_usage
+from mimo.utils.torch_utils import free_gpu_memory
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
@@ -285,6 +287,8 @@ class InferencePipeline():
         return data_4DH["data_joints_2d"]
 
     def __call__(self, input_video_path, output_video_path):
+        free_gpu_memory(self.accelerator)
+        
         video = cv2.VideoCapture(input_video_path)
 
         basename = os.path.basename(input_video_path)
@@ -300,6 +304,7 @@ class InferencePipeline():
 
         frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
         print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
+        get_gpu_memory_usage()
 
         resized_frames = np.array(sampling_resizing(frame_gen, 
                                            frames_per_second, 
@@ -307,9 +312,12 @@ class InferencePipeline():
                                            input_size=(width, height), 
                                            output_width=self.input_net_size))
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
+        get_gpu_memory_usage()
 
         depth_frames = np.concatenate(self.depth_estimation(resized_frames))
         print("np.shape(depth_frames)", np.shape(depth_frames), type(depth_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         detectron2_output = self.get_detectron2_output(resized_frames)
         print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']), type(detectron2_output['data_frame_index']))
@@ -317,6 +325,8 @@ class InferencePipeline():
         print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']), type(detectron2_output['data_scores']))
         print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
         print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
 
@@ -327,28 +337,42 @@ class InferencePipeline():
         print("np.shape(human_frames)", np.shape(human_frames), type(human_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         joints2d = self.get_joints2d(input_video_path)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         remove_tmp_dir(input_video_path)
 
         joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         apose_ref = self.get_apose_ref(resized_frames)
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         clip_embeddings = self.clip_apose(apose_ref)
         print("np.shape(clip_embeddings)", np.shape(clip_embeddings), type(clip_embeddings))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
 
         video.release()
