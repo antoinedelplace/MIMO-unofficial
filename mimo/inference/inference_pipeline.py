@@ -36,15 +36,18 @@ from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_
 
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
-from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
 from mimo.utils.propainter_utils import ProPainterBatchPredictor
+from mimo.utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, ReposerBatchPredictor, get_kps_image
+from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
+from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
 from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing
 from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
 from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settings, post_processing_detectron2
 from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers
 from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
+from mimo.dataset_preprocessing.get_apose_ref import get_apose_ref_img
 
 class InferencePipeline():
     def __init__(  # See default values in inference/main.py
@@ -54,20 +57,24 @@ class InferencePipeline():
             num_workers,
             input_net_size,
             input_net_fps,
+            a_pose_raw_path,
             depth_anything_encoder,
             score_threshold_detectron2,
             batch_size_depth,
             batch_size_detectron2,
             batch_size_propainter,
+            batch_size_reposer,
         ):
         self.num_workers = num_workers
         self.input_net_size = input_net_size
         self.input_net_fps = input_net_fps
+        self.a_pose_raw_path = a_pose_raw_path
         self.depth_anything_encoder = depth_anything_encoder
         self.score_threshold_detectron2 = score_threshold_detectron2
         self.batch_size_depth = batch_size_depth
         self.batch_size_detectron2 = batch_size_detectron2
         self.batch_size_propainter = batch_size_propainter
+        self.batch_size_reposer = batch_size_reposer
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
@@ -224,6 +231,24 @@ class InferencePipeline():
 
         return inpaint_frames(scene_frames, predictor)
 
+    def get_apose_ref(self, resized_frames):
+        download_image_encoder()
+        download_vae()
+        download_base_model()
+        download_anyone()
+        download_dwpose()
+
+        vae = VaeBatchPredictor(self.batch_size_reposer, self.num_workers)
+        clip = CLIPBatchPredictor(self.batch_size_reposer, self.num_workers)
+        reposer = ReposerBatchPredictor(self.batch_size_reposer, self.num_workers, clip, vae)
+
+        reposer.pipe = self.accelerator.prepare(reposer.pipe)
+
+        a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path)
+
+        return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d)
+
+
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
 
@@ -268,5 +293,8 @@ class InferencePipeline():
 
         scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
+
+        apose_ref = self.get_apose_ref(resized_frames)
+        print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
 
         video.release()

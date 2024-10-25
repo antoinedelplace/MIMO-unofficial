@@ -12,6 +12,16 @@ from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
 from mimo.configs.paths import APOSE_REF_FOLDER, HUMAN_FOLDER, DATA_FOLDER
 
+def get_apose_ref_img(frame_gen, reposer, a_pose_kps, ref_points_2d):
+    input_image = get_frame_closest_pose(frame_gen, ref_points_2d)
+    # print("np.shape(input_image)", np.shape(input_image))
+    # cv2.imwrite("../../data/ref_pose.png", input_image)
+
+    output_image = np.concatenate(list(reposer(input_image, [a_pose_kps]*24))) # Need 24 frames to get relevant outputs
+    # print("np.shape(output_image)", np.shape(output_image))
+
+    return output_image[0]
+
 def run_on_video(input_path, reposer, a_pose_kps, ref_points_2d, output_folder):
     video = cv2.VideoCapture(input_path)
 
@@ -19,15 +29,10 @@ def run_on_video(input_path, reposer, a_pose_kps, ref_points_2d, output_folder):
 
     frame_gen = frame_gen_from_video(video)
 
-    input_image = get_frame_closest_pose(video, frame_gen, ref_points_2d)
-    # print("np.shape(input_image)", np.shape(input_image))
-    # cv2.imwrite("../../data/ref_pose.png", input_image)
-
-    output_image = np.concatenate(list(reposer(input_image, [a_pose_kps]*24))) # Need 24 frames to get relevant outputs
-    # print("np.shape(output_image)", np.shape(output_image))
+    apose_ref_img = get_apose_ref_img(frame_gen, reposer, a_pose_kps, ref_points_2d)
 
     output_path = os.path.join(output_folder, basename).replace(".mp4", ".png")
-    cv2.imwrite(output_path, output_image[0])
+    cv2.imwrite(output_path, apose_ref_img)
 
     video.release()
 

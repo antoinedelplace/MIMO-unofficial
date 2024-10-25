@@ -13,6 +13,8 @@ from torch.utils.data import DataLoader
 import numpy as np
 from PIL import Image
 
+import onnxruntime as ort
+
 from diffusers import DDIMScheduler
 
 from huggingface_hub import hf_hub_download
@@ -88,12 +90,11 @@ def get_frame_with_median_mask(video, frame_gen):
 
     return frame_from_video(video, index)
 
-def get_frame_closest_pose(video, frame_gen, ref_points_2d):
-    i_chosen = 0
+def get_frame_closest_pose(frame_gen, ref_points_2d):
     distance = np.infty
+    frame = None
 
     detector = CustomDWposeDetector()
-    detector = detector.to("cuda")
 
     ref_points_2d_norm = (ref_points_2d['bodies']['candidate']-np.mean(ref_points_2d['bodies']['candidate']))/np.std(ref_points_2d['bodies']['candidate'])
 
@@ -105,13 +106,12 @@ def get_frame_closest_pose(video, frame_gen, ref_points_2d):
         new_distance = np.sum(np.abs(points_2d_norm-ref_points_2d_norm))
         if new_distance < distance:
             distance = new_distance
-            i_chosen = i_frame
+            frame = image
     
-    return frame_from_video(video, i_chosen)
+    return frame
 
 def get_kps_image(input_image_path):
     detector = CustomDWposeDetector()
-    detector = detector.to("cuda")
 
     input_image = cv2.imread(input_image_path)
     input_image_pil = Image.fromarray(input_image[:, :, ::-1])
@@ -120,10 +120,24 @@ def get_kps_image(input_image_path):
 
     return np.array(result_pil), points_2d
 
+class CustomWholebody(Wholebody):
+    def __init__(self):
+        providers = [("CUDAExecutionProvider", {"device_id": torch.cuda.current_device(),
+                                        "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)})]
+        
+        onnx_det = os.path.join(CHECKPOINTS_FOLDER, "DWPose/yolox_l.onnx")
+        onnx_pose = os.path.join(CHECKPOINTS_FOLDER, "DWPose/dw-ll_ucoco_384.onnx")
+
+        self.session_det = ort.InferenceSession(
+            path_or_bytes=onnx_det, providers=providers
+        )
+        self.session_pose = ort.InferenceSession(
+            path_or_bytes=onnx_pose, providers=providers
+        )
+
 class CustomDWposeDetector(DWposeDetector):
-    def to(self, device):
-        self.pose_estimation = Wholebody(device, pathPrefix=Path(CHECKPOINTS_FOLDER))
-        return self
+    def __init__(self):
+        self.pose_estimation = CustomWholebody()
 
 class ReposerBatchPredictor():
     def __init__(
