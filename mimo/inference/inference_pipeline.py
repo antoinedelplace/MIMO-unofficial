@@ -41,6 +41,7 @@ from mimo.utils.propainter_utils import ProPainterBatchPredictor
 from mimo.utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, ReposerBatchPredictor, get_kps_image
 from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
+from mimo.utils.pose_4DH_utils import HMR2_4dhuman
 
 from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing
 from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
@@ -48,6 +49,7 @@ from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settin
 from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers
 from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
 from mimo.dataset_preprocessing.get_apose_ref import get_apose_ref_img
+from mimo.dataset_preprocessing.pose_estimation_4DH import get_cfg, get_data_from_4DH
 
 class InferencePipeline():
     def __init__(  # See default values in inference/main.py
@@ -206,14 +208,12 @@ class InferencePipeline():
 
         return post_processing_detectron2(list(predictor(resized_frames)))
     
-    def get_layers_sam2(self, resized_frames, detectron2_output, depth_frames):
+    def get_layers_sam2(self, input_video_path, resized_frames, detectron2_output, depth_frames):
         checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
         model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
         predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
         predictor = self.accelerator.prepare(predictor)
-
-        input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)
 
         (
             min_frame_idx, 
@@ -221,8 +221,6 @@ class InferencePipeline():
             instance_sam_output, 
             foreground_mask
         ) = get_instance_sam_output(input_video_path, detectron2_output, depth_frames, predictor, self.score_threshold_detectron2)
-
-        remove_tmp_dir(input_video_path)
 
         return process_layers(resized_frames, 
                                 instance_sam_output, 
@@ -275,6 +273,16 @@ class InferencePipeline():
 
         return scene_frames, occlusion_frames, resized_frames, apose_ref
 
+    def get_joints2d(self, input_video_path):
+        phalp_tracker = HMR2_4dhuman(get_cfg())
+
+        phalp_tracker.HMAR = self.accelerator.prepare(phalp_tracker.HMAR)
+
+        data_4DH = get_data_from_4DH(input_video_path, phalp_tracker)
+
+        return data_4DH["data_joints_2d"]
+
+
     def __call__(self, input_video_path, output_video_path):
         video = cv2.VideoCapture(input_video_path)
 
@@ -309,13 +317,20 @@ class InferencePipeline():
         print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
         print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
 
-        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(resized_frames, detectron2_output, depth_frames)
+        input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
+
+        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
         human_frames = np.array(human_frames)
         occlusion_frames = np.array(occlusion_frames)
         scene_frames = np.array(scene_frames)
         print("np.shape(human_frames)", np.shape(human_frames), type(human_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
+
+        joints2d = self.get_joints2d(input_video_path)
+        print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
+
+        remove_tmp_dir(input_video_path)
 
         scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))

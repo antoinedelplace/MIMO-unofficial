@@ -13,6 +13,20 @@ from mimo.utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Open
 
 from mimo.configs.paths import HUMAN_FOLDER, POSES_4DH_FOLDER
 
+def get_cfg():
+    cfg = Human4DConfig()
+
+    cfg.SMPL = make_iterable(cfg.SMPL)
+    cfg.render.enable = False
+    cfg.video.extract_video = False
+    cfg.video.source = None
+    cfg.video.start_frame=None
+    cfg.video.end_frame=None
+    cfg.video.start_time=None
+    cfg.video.end_time=None
+    cfg.post_process.phalp_pkl_path = None
+
+    return cfg
 
 def make_iterable(obj):
     def smpl_iter(self):
@@ -103,13 +117,10 @@ def visualize_joints_2d(data_joints_2d, input_path, output_folder, chains=None):
 
     output_file.release()
     video.release()
-    
-def run_on_video(input_path, phalp_tracker, output_folder):
+
+def get_data_from_4DH(input_path, phalp_tracker):
     phalp_tracker.io_manager.input_path = input_path
     outputs, _ = phalp_tracker.track()
-
-    basename = os.path.basename(input_path)
-    output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
 
     n_frames = len(outputs)
     n_joints = len(SMPL_bones)
@@ -127,13 +138,20 @@ def run_on_video(input_path, phalp_tracker, output_folder):
         data_betas[i] = outputs[i]["smpl"][0]["betas"]
         data_joints_3d[i] = outputs[i]["3d_joints"][0]
         data_joints_2d[i] = outputs[i]["2d_joints"][0].reshape(-1, 2)
+    
+    return {"data_poses": data_poses,
+            "data_cam_trans": data_cam_trans,
+            "data_betas": data_betas,
+            "data_joints_3d": data_joints_3d,
+            "data_joints_2d": data_joints_2d}
+    
+def run_on_video(input_path, phalp_tracker, output_folder):
+    basename = os.path.basename(input_path)
+    output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
 
-    np.savez_compressed(output_path, 
-                        data_poses=data_poses, 
-                        data_cam_trans=data_cam_trans,
-                        data_betas=data_betas,
-                        data_joints_3d=data_joints_3d,
-                        data_joints_2d=data_joints_2d)
+    data_4DH = get_data_from_4DH(input_path, phalp_tracker)
+
+    np.savez_compressed(output_path, **data_4DH)
 
     # outputs = dict(np.load(output_path))
     # data_joints_2d = outputs["data_joints_2d"]
@@ -154,19 +172,7 @@ def main(
 
     set_memory_limit(cpu_memory_limit_gb)
 
-    cfg = Human4DConfig()
-
-    cfg.SMPL = make_iterable(cfg.SMPL)
-    cfg.render.enable = False
-    cfg.video.extract_video = False
-    cfg.video.source = None
-    cfg.video.start_frame=None
-    cfg.video.end_frame=None
-    cfg.video.start_time=None
-    cfg.video.end_time=None
-    cfg.post_process.phalp_pkl_path = None
-
-    phalp_tracker = HMR2_4dhuman(cfg)
+    phalp_tracker = HMR2_4dhuman(get_cfg())
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
     input_files = sorted(os.listdir(input_folder))
