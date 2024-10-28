@@ -413,13 +413,13 @@ class InferencePipeline():
 
         model = self.accelerator.prepare(model)
 
-        num_warmup_steps = len(noise_scheduler.timesteps) - self.num_inference_steps * noise_scheduler.order
-        progress_bar = self.progress_bar(self.num_inference_steps)
+        num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
+        progress_bar = self.get_progress_bar(self.num_scheduler_steps)
 
         self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip, timestep)
 
         rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
-        pose_features = self.pose_guider(rast_2d_joints)
+        pose_features = self.pose_guider(rast_2d_joints)  # (b, c, f, h, w)
 
         latents_scene = latents_scene.transpose(1, 2)  # (b, c, f, h, w)
         latents_occlusion = latents_occlusion.transpose(1, 2)  # (b, c, f, h, w)

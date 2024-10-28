@@ -27,7 +27,7 @@ def main(
         batch_size_propainter=128,
         batch_size_reposer=24,
         batch_size_clip=16,
-        batch_size_vae=16,
+        batch_size_vae=12,
     ):
     set_memory_limit(cpu_memory_limit_gb)
 
