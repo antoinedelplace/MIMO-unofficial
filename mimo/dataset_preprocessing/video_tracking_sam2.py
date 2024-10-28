@@ -11,7 +11,7 @@ import numpy as np
 from detectron2.utils.video_visualizer import VideoVisualizer
 from detectron2.utils.visualizer import ColorMode
 from detectron2.data import MetadataCatalog
-from detectron2.structures import Instances
+from detectron2.structures import Instances, Boxes
 
 from sam2.build_sam import build_sam2_video_predictor
 
@@ -34,6 +34,16 @@ def get_global_index_biggest_human_in_frame(detectron2_data, i_frame, score_thre
                                              & (detectron2_data["data_scores"] > score_threshold))
 
     i_sub = np.argmax(detectron2_data["data_pred_masks"][indexes_humans_at_input_frame].sum(axis=(1, 2)))
+    return indexes_humans_at_input_frame[0][i_sub]
+
+def get_global_index_most_central_human_in_frame(detectron2_data, i_frame, score_threshold, width, height):
+    indexes_humans_at_input_frame = np.where((detectron2_data["data_pred_classes"] == 0) 
+                                             & (detectron2_data["data_frame_index"] == i_frame) 
+                                             & (detectron2_data["data_scores"] > score_threshold))
+
+    
+    centers = Boxes(detectron2_data["data_pred_boxes"][indexes_humans_at_input_frame]).get_centers()
+    i_sub = np.argmin((centers[:, 0] - width/2)**2+(centers[:, 1] - height/2)**2)
     return indexes_humans_at_input_frame[0][i_sub]
 
 def get_global_indexes_foreground_objects(instance_sam_output, depth, detectron2_data, score_threshold):
@@ -229,21 +239,21 @@ def save(
     output_occlusion_file.release()
 
 def get_instance_sam_output(input_path, detectron2_data, depth, predictor, score_threshold):
-    i_first_frame = get_index_first_frame_with_character(detectron2_data, score_threshold)
-    print("i_first_frame", i_first_frame)
-    i_biggest_human = get_global_index_biggest_human_in_frame(detectron2_data, i_first_frame, score_threshold)
-    print("i_biggest_human", i_biggest_human)
-
     depth = depth[:, :, :, 0]
     num_frames, width, height = np.shape(depth)
+
+    i_first_frame = get_index_first_frame_with_character(detectron2_data, score_threshold)
+    print("i_first_frame", i_first_frame)
+    i_central_human = get_global_index_most_central_human_in_frame(detectron2_data, i_first_frame, score_threshold, width, height)
+    print("i_central_human", i_central_human)
 
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         state = predictor.init_state(input_path)
 
         predictor.add_new_points_or_box(inference_state=state, 
-                                        frame_idx=detectron2_data["data_frame_index"][i_biggest_human],
-                                        obj_id=detectron2_data["data_pred_classes"][i_biggest_human],
-                                        box=detectron2_data["data_pred_boxes"][i_biggest_human])
+                                        frame_idx=detectron2_data["data_frame_index"][i_central_human],
+                                        obj_id=detectron2_data["data_pred_classes"][i_central_human],
+                                        box=detectron2_data["data_pred_boxes"][i_central_human])
 
         sam_output = [(out_frame_idx, out_obj_ids, out_mask_logits.cpu()) for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state, start_frame_idx=0)]
     
