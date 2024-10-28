@@ -21,6 +21,9 @@ if __name__ == "__main__":
 #    - numa efficiency
 #    - fp16
 
-# accelerate launch mimo/training/main.py
+# accelerate launch mimo/training/main.py -c 1540
+
+# python mimo/training/main.py -c 1540
+
 
 # mlflow ui -p 5003

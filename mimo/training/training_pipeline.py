@@ -348,7 +348,7 @@ class TrainingPipeline:
     def get_timesteps(self, latents):
         return torch.randint(
                     0,
-                    self.train_noise_scheduler.num_train_timesteps,
+                    self.train_noise_scheduler.config.num_train_timesteps,
                     (latents.shape[0],),
                     device=latents.device,
                 ).long()
@@ -421,7 +421,7 @@ class TrainingPipeline:
             target_noise = self.get_target_noise(latent_video, noise, timesteps)
 
             uncond_fwd = random.random() < self.cfg.uncond_ratio
-
+            
             noise_pred = self.model(
                         noisy_latent_video,
                         timesteps,

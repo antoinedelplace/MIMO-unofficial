@@ -52,7 +52,7 @@ def get_i_first_frame(filename, detectron_score_threshold):
     n_frames_video = len(data["latent_video"])
 
     if n_frames_scene != n_frames_occlusion:
-        print(f"Something is wrong with {filename}. Number of frames for scene ({n_frames_scene}) is not the same as occlusion ({n_frames_occlusion}). We take into account the number of frames of the scene.")
+        raise Exception(f"Something is wrong with {filename}. Number of frames for scene ({n_frames_scene}) is not the same as occlusion ({n_frames_occlusion}). We discard this file.")
 
     i_first_frame = 0
     if n_frames_scene != n_frames_video:

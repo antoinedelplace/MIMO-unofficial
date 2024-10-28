@@ -1,7 +1,7 @@
 data:
   train_batch_size: 1
   window_stride: 4 
-  window_length: 3
+  window_length: 23
   num_workers: 8
 
 solver:
