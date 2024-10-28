@@ -92,7 +92,7 @@ def parse_args(main_function):
             used_short_versions.add(short_version)
             param_call = (f'-{short_version}', f'--{param_name}')
         else:
-            param_call = (f'--{param_name}')
+            param_call = (f'--{param_name}',)
 
         if param.default is not inspect.Parameter.empty:
             param_type = type(param.default)
