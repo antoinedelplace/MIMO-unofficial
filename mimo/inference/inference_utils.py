@@ -30,10 +30,10 @@ def remove_tmp_dir(video_path):
     if os.path.commonpath([system_temp_dir, folder_path]) == system_temp_dir:
         shutil.rmtree(folder_path)
 
-def get_extra_kwargs_scheduler(generator, eta, scheduler):
+def get_extra_kwargs_scheduler(generator, eta, noise_scheduler):
     extra_step_kwargs = {}
 
-    scheduler_params = set(inspect.signature(scheduler.step).parameters.keys())
+    scheduler_params = set(inspect.signature(noise_scheduler.step).parameters.keys())
     if "eta" in scheduler_params:
         extra_step_kwargs["eta"] = eta
 

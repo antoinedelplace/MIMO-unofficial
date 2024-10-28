@@ -311,12 +311,12 @@ class InferencePipeline():
 
             encoder_hidden_states = torch.cat(
                 [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
-            )
+            ) # (2b, 1, d)
 
         model.reference_unet(
             latent_apose.repeat(
                 (2 if self.do_classifier_free_guidance else 1), 1, 1, 1
-            ),
+            ),  # (2b, c, h, w) or (b, c, h, w)
             torch.zeros_like(timestep),
             encoder_hidden_states=encoder_hidden_states,
             return_dict=False,
@@ -355,7 +355,7 @@ class InferencePipeline():
 
     def apply_guidance(self, noise_pred, counter):
         if self.do_classifier_free_guidance:
-            noise_pred_uncond, noise_pred_text = (noise_pred / counter).chunk(2)
+            noise_pred_uncond, noise_pred_text = (noise_pred / counter).chunk(2)  # Mean along context
             noise_pred = noise_pred_uncond + self.guidance_scale * (
                 noise_pred_text - noise_pred_uncond
             )
@@ -365,23 +365,21 @@ class InferencePipeline():
     def get_noise_pred(self, timestep, model, a_pose_clip, noise_scheduler, pose_features, latents):
         encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
 
-        noise_pred = torch.zeros(
-            (
-                latents.shape[0] * (2 if self.do_classifier_free_guidance else 1),
-                *latents.shape[1:],
-            ))
-        counter = torch.zeros((1, 1, latents.shape[2], 1, 1))
+        (b, c, f, h, w) = latents.shape
+        
+        noise_pred = torch.zeros((b * (2 if self.do_classifier_free_guidance else 1), c, f, h, w))  # (2b, c, f, h, w) or (b, c, f, h, w)
+        counter = torch.zeros((1, 1, f, 1, 1))
 
         for context in self.get_global_context(latents.shape[2]):
             latent_model_input = (
-                torch.cat([latents[:, :, c] for c in context])
+                torch.cat([latents[:, :, i_f] for i_f in context])
                 .repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
-            )
+            )  # (2b, c, len(context), h, w) or (b, c, len(context), h, w)
             latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
             
             latent_pose_input = torch.cat(
-                [pose_features[:, :, c] for c in context]
-            ).repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+                [pose_features[:, :, i_f] for i_f in context]
+            ).repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, len(context), h, w) or (b, c, len(context), h, w)
 
             pred = model.denoising_unet(
                 latent_model_input,
@@ -391,9 +389,9 @@ class InferencePipeline():
                 return_dict=False,
             )[0]
 
-            for c in context:
-                noise_pred[:, :, c] = noise_pred[:, :, c] + pred
-                counter[:, :, c] = counter[:, :, c] + 1
+            for i_f in context:
+                noise_pred[:, :, i_f] = noise_pred[:, :, i_f] + pred
+                counter[:, :, i_f] = counter[:, :, i_f] + 1
         
         noise_pred = self.apply_guidance(noise_pred, counter)
         
@@ -420,13 +418,13 @@ class InferencePipeline():
 
         self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip, timestep)
 
+        rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
+        pose_features = self.pose_guider(rast_2d_joints)
+
         latents_scene = latents_scene.transpose(1, 2)  # (b, c, f, h, w)
         latents_occlusion = latents_occlusion.transpose(1, 2)  # (b, c, f, h, w)
         noisy_latent_video = self.get_init_latent(latents_scene, noise_scheduler)  # (b, c, f, h, w)
         latents = torch.cat((noisy_latent_video, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
-
-        rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
-        pose_features = self.pose_guider(rast_2d_joints)
         
         for i_step, timestep in enumerate(noise_scheduler.timesteps):
             noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, a_pose_clip, pose_features, latents)

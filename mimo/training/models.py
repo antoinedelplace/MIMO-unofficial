@@ -41,7 +41,7 @@ class Net(nn.Module):
         # print("latents_occlusion", latents_occlusion.shape)
 
         rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
-        pose_features = self.pose_guider(rast_2d_joints)
+        pose_features = self.pose_guider(rast_2d_joints)  # (b, c, f, h, w)
 
         # print("pose_features", pose_features.shape)
 
