@@ -231,7 +231,8 @@ class TrainingPipeline:
     
     def get_trainable_params(self, model):
         trainable_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-        self.logger.info(f"Total trainable params {len(trainable_params)}")
+        total_params = sum(p.numel() for p in trainable_params)
+        self.logger.info(f"Total trainable parameters: {total_params}")
         return trainable_params
 
     def get_optimizer(self, trainable_params, learning_rate):

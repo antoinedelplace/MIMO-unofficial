@@ -1,8 +1,8 @@
 data:
   train_batch_size: 1
   window_stride: 4 
-  window_length: 12
-  num_workers: 8
+  window_length: 20
+  num_workers: 16
 
 solver:
   gradient_accumulation_steps: 1
