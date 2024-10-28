@@ -63,6 +63,8 @@ class TrainingPipeline:
         self.lr_scheduler = self.get_lr_scheduler(self.optimizer)
         self.train_dataloader, self.train_dataset, self.val_dataloader, self.val_dataset = self.get_dataloaders()
 
+        self.validate_steps = (len(self.val_dataset)+self.accelerator.num_processes)//self.accelerator.num_processes
+
     def config_seed(self):
         if self.cfg.seed is not None:
             seed_everything(self.cfg.seed)
@@ -329,10 +331,10 @@ class TrainingPipeline:
         
         return first_epoch, global_step
     
-    def get_progress_bar(self, global_step):
+    def get_progress_bar(self, current_step, max_step):
         # Only show the progress bar once on each machine.
         return tqdm(
-            range(global_step, self.cfg.solver.max_train_steps),
+            range(current_step, max_step),
             disable=not self.accelerator.is_local_main_process,
         )
 
@@ -470,33 +472,32 @@ class TrainingPipeline:
     
     def validate(self):
         if self.global_step % self.cfg.val.validation_steps == 0:
-            if self.accelerator.is_main_process:
-                progress_bar = self.get_progress_bar(self.global_step)
-                progress_bar.set_description(f"Validation")
-                
-                total_val_loss = 0.0
-                with torch.no_grad():
+            progress_bar = self.get_progress_bar(0, self.validate_steps)
+            progress_bar.set_description(f"Validation")
+            
+            total_val_loss = 0.0
+            with torch.no_grad():
+                t_data_start = time.time()
+                for step, batch in enumerate(self.val_dataloader):
+                    t_data = time.time() - t_data_start
+                    loss, global_loss = self.run_one_step(batch, is_validation=True)
+                    total_val_loss += global_loss
+                    self.reset_after_run(progress_bar, t_data, loss)
                     t_data_start = time.time()
-                    for step, batch in enumerate(self.val_dataloader):
-                        t_data = time.time() - t_data_start
-                        loss, global_loss = self.run_one_step(batch, is_validation=True)
-                        total_val_loss += global_loss
-                        self.reset_after_run(progress_bar, t_data, loss)
-                        t_data_start = time.time()
                 
-                total_val_loss /= len(self.val_dataloader)
-                self.accelerator.log({"val_loss": total_val_loss}, step=self.global_step)
+            total_val_loss /= len(self.val_dataloader)
+            self.accelerator.log({"val_loss": total_val_loss}, step=self.global_step)
 
-                if total_val_loss < self.best_total_val_loss:
-                    self.best_total_val_loss = total_val_loss
-                    self.save_model(self.save_dir_val)
+            if total_val_loss < self.best_total_val_loss:
+                self.best_total_val_loss = total_val_loss
+                self.save_model(self.save_dir_val)
 
     def train(self):
         num_update_steps_per_epoch, num_train_epochs = self.accelerate()
         self.log_infos(num_train_epochs)
         
         first_epoch, self.global_step = self.load_from_checkpoints(num_update_steps_per_epoch)
-        progress_bar = self.get_progress_bar(self.global_step)
+        progress_bar = self.get_progress_bar(self.global_step, self.cfg.solver.max_train_steps)
         
         for epoch in range(first_epoch, num_train_epochs):
             progress_bar.set_description(f"Epoch {epoch}")

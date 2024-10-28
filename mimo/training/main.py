@@ -23,7 +23,4 @@ if __name__ == "__main__":
 
 # accelerate launch mimo/training/main.py -c 1540
 
-# python mimo/training/main.py -c 1540
-
-
 # mlflow ui -p 5003
