@@ -270,7 +270,7 @@ class InferencePipeline():
 
         a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path, dw_pose_detector)
 
-        return get_apose_ref_img(resized_frames, reposer, dw_pose_detector, a_pose_kps, ref_points_2d)
+        return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d, dw_pose_detector)
 
     def clip_apose(self, apose_ref):
         download_image_encoder()
@@ -435,7 +435,6 @@ class InferencePipeline():
         
         reference_control_reader.clear()
         reference_control_writer.clear()
-
 
     def __call__(self, input_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
