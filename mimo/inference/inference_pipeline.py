@@ -8,6 +8,7 @@ sys.path.append(SAM2_REPO)
 import os, logging, cv2
 import torch
 import numpy as np
+from tqdm import tqdm
 
 from omegaconf import OmegaConf
 
@@ -21,21 +22,23 @@ from diffusers import DDIMScheduler
 from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as diffusers_logging
 from diffusers.utils.import_utils import is_xformers_available
+from diffusers.utils.torch_utils import randn_tensor
 
-from src.utils.util import seed_everything
 from src.models.mutual_self_attention import ReferenceAttentionControl
 from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
+from src.pipelines.context import get_context_scheduler
 
 from sam2.build_sam import build_sam2_video_predictor
 
 from mimo.training.training_utils import get_torch_weight_dtype
-from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir
+from mimo.training.models import Net
+from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir, get_extra_kwargs_scheduler
 
 from mimo.utils.general_utils import get_gpu_memory_usage
-from mimo.utils.torch_utils import free_gpu_memory
+from mimo.utils.torch_utils import free_gpu_memory, seed_everything
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
@@ -59,6 +62,8 @@ class InferencePipeline():
     def __init__(  # See default values in inference/main.py
             self, 
             seed, 
+            num_scheduler_steps,
+            guidance_scale,
             weight_dtype, 
             num_workers,
             input_net_size,
@@ -73,6 +78,8 @@ class InferencePipeline():
             batch_size_clip,
             batch_size_vae,
         ):
+        self.num_scheduler_steps = num_scheduler_steps
+        self.guidance_scale = guidance_scale
         self.num_workers = num_workers
         self.input_net_size = input_net_size
         self.input_net_fps = input_net_fps
@@ -88,10 +95,12 @@ class InferencePipeline():
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
-        seed_everything(seed)
+        self.generator = seed_everything(seed)
 
         self.weight_dtype_str = weight_dtype
         self.weight_dtype = get_torch_weight_dtype(weight_dtype)
+
+        self.do_classifier_free_guidance = self.guidance_scale > 1.0
 
         self.accelerator = self.get_accelerator()
         self.logger = self.get_logger(self.accelerator)
@@ -119,7 +128,8 @@ class InferencePipeline():
         return get_accelerate_logger(__name__, log_level="INFO")
     
     def get_model(self):
-        vae = VaeBatchPredictor(batch_size, workers)
+        download_base_model()
+        download_anyone()
 
         reference_unet = UNet2DConditionModel.from_pretrained(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
@@ -152,12 +162,6 @@ class InferencePipeline():
         pose_guider.load_state_dict(
             torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
-
-        # Set motion module learnable
-        for name, module in denoising_unet.named_modules():
-            if "motion_modules" in name:
-                for params in module.parameters():
-                    params.requires_grad = True
         
         reference_control_writer = ReferenceAttentionControl(
             reference_unet,
@@ -172,14 +176,13 @@ class InferencePipeline():
             fusion_blocks="full",
         )
         
-        if self.cfg.solver.enable_xformers_memory_efficient_attention:
-            if is_xformers_available():
-                reference_unet.enable_xformers_memory_efficient_attention()
-                denoising_unet.enable_xformers_memory_efficient_attention()
-            else:
-                raise ValueError(
-                    "xformers is not available. Make sure it is installed correctly"
-                )
+        if is_xformers_available():
+            reference_unet.enable_xformers_memory_efficient_attention()
+            denoising_unet.enable_xformers_memory_efficient_attention()
+        else:
+            raise ValueError(
+                "xformers is not available. Make sure it is installed correctly"
+            )
         
         model = Net(
             reference_unet,
@@ -191,6 +194,20 @@ class InferencePipeline():
         
         return model, reference_control_writer, reference_control_reader
 
+    def get_noise_scheduler(self):
+        sched_kwargs = OmegaConf.to_container(self.infer_cfg.noise_scheduler_kwargs)
+        noise_scheduler = DDIMScheduler(**sched_kwargs)
+        noise_scheduler.set_timesteps(self.num_scheduler_steps)
+
+        return noise_scheduler
+    
+    def get_progress_bar(self, max_step):
+        # Only show the progress bar once on each machine.
+        return tqdm(
+            range(max_step),
+            disable=not self.accelerator.is_local_main_process,
+        )
+    
     def depth_estimation(self, resized_frames):
         depth_anything = DepthBatchPredictor(self.batch_size_depth, 
                                              self.num_workers, 
@@ -287,6 +304,139 @@ class InferencePipeline():
 
         return data_4DH["data_joints_2d"]
 
+    def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip, timestep):
+        encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
+        if self.do_classifier_free_guidance:
+            uncond_encoder_hidden_states = torch.zeros_like(encoder_hidden_states)
+
+            encoder_hidden_states = torch.cat(
+                [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
+            )
+
+        model.reference_unet(
+            latent_apose.repeat(
+                (2 if self.do_classifier_free_guidance else 1), 1, 1, 1
+            ),
+            torch.zeros_like(timestep),
+            encoder_hidden_states=encoder_hidden_states,
+            return_dict=False,
+        )
+        reference_control_reader.update(reference_control_writer)
+
+    def get_init_latent(self, latents_scene, noise_scheduler):
+        latents = randn_tensor(latents_scene.shape, generator=self.generator)
+        latents = latents * noise_scheduler.init_noise_sigma
+
+        return latents
+    
+    def get_global_context(self, nb_frames):
+        context_scheduler = get_context_scheduler("uniform")
+
+        context_queue = list(
+            context_scheduler(
+                step=0,
+                num_steps=self.num_inference_steps,
+                num_frames=nb_frames,
+                context_size=self.infer_cfg.context.context_frames,
+                context_stride=self.infer_cfg.context_stride,
+                context_overlap=self.infer_cfg.context_overlap,
+            )
+        )
+        num_context_batches = np.ceil(len(context_queue) / self.infer_cfg.context_batch_size)
+        global_context = []
+        for i in range(num_context_batches):
+            global_context.append(
+                context_queue[
+                i * self.infer_cfg.context_batch_size: (i + 1) * self.infer_cfg.context_batch_size
+                ]
+            )
+        
+        return global_context
+
+    def apply_guidance(self, noise_pred, counter):
+        if self.do_classifier_free_guidance:
+            noise_pred_uncond, noise_pred_text = (noise_pred / counter).chunk(2)
+            noise_pred = noise_pred_uncond + self.guidance_scale * (
+                noise_pred_text - noise_pred_uncond
+            )
+        
+        return noise_pred
+
+    def get_noise_pred(self, timestep, model, a_pose_clip, noise_scheduler, pose_features, latents):
+        encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
+
+        noise_pred = torch.zeros(
+            (
+                latents.shape[0] * (2 if self.do_classifier_free_guidance else 1),
+                *latents.shape[1:],
+            ))
+        counter = torch.zeros((1, 1, latents.shape[2], 1, 1))
+
+        for context in self.get_global_context(latents.shape[2]):
+            latent_model_input = (
+                torch.cat([latents[:, :, c] for c in context])
+                .repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+            )
+            latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
+            
+            latent_pose_input = torch.cat(
+                [pose_features[:, :, c] for c in context]
+            ).repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+
+            pred = model.denoising_unet(
+                latent_model_input,
+                timestep,
+                encoder_hidden_states=encoder_hidden_states,
+                pose_cond_fea=latent_pose_input,
+                return_dict=False,
+            )[0]
+
+            for c in context:
+                noise_pred[:, :, c] = noise_pred[:, :, c] + pred
+                counter[:, :, c] = counter[:, :, c] + 1
+        
+        noise_pred = self.apply_guidance(noise_pred, counter)
+        
+        return noise_pred
+    
+    def update_progress_bar(self, progress_bar, i_step, noise_scheduler, num_warmup_steps):
+        if i_step == len(noise_scheduler.timesteps) - 1 or (
+                (i_step + 1) > num_warmup_steps and (i_step + 1) % noise_scheduler.order == 0
+            ):
+                progress_bar.update()
+        
+        return progress_bar
+
+    def apply_diffusion(self, rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
+        model, reference_control_writer, reference_control_reader = self.get_model()
+
+        noise_scheduler = self.get_noise_scheduler()
+        extra_kwargs_scheduler = get_extra_kwargs_scheduler(self.generator, eta=0.0, noise_scheduler=noise_scheduler)
+
+        model = self.accelerator.prepare(model)
+
+        num_warmup_steps = len(noise_scheduler.timesteps) - self.num_inference_steps * noise_scheduler.order
+        progress_bar = self.progress_bar(self.num_inference_steps)
+
+        self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip, timestep)
+
+        latents_scene = latents_scene.transpose(1, 2)  # (b, c, f, h, w)
+        latents_occlusion = latents_occlusion.transpose(1, 2)  # (b, c, f, h, w)
+        noisy_latent_video = self.get_init_latent(latents_scene, noise_scheduler)  # (b, c, f, h, w)
+        latents = torch.cat((noisy_latent_video, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
+
+        rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
+        pose_features = self.pose_guider(rast_2d_joints)
+        
+        for i_step, timestep in enumerate(noise_scheduler.timesteps):
+            noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, a_pose_clip, pose_features, latents)
+            latents = noise_scheduler(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
+            progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
+        
+        reference_control_reader.clear()
+        reference_control_writer.clear()
+
+
     def __call__(self, input_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
 
@@ -305,6 +455,7 @@ class InferencePipeline():
 
         frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
         print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
+        video.release()
         get_gpu_memory_usage()
 
         resized_frames = np.array(sampling_resizing(frame_gen, 
@@ -332,10 +483,9 @@ class InferencePipeline():
         input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
 
         human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
-        human_frames = np.array(human_frames)
+        del human_frames, detectron2_output, depth_frames
         occlusion_frames = np.array(occlusion_frames)
         scene_frames = np.array(scene_frames)
-        print("np.shape(human_frames)", np.shape(human_frames), type(human_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         free_gpu_memory(self.accelerator)
@@ -369,11 +519,15 @@ class InferencePipeline():
         get_gpu_memory_usage()
 
         scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
+        del resized_frames
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
-        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        video.release()
+        resized_frames = self.apply_diffusion(joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)
+        del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
+        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()

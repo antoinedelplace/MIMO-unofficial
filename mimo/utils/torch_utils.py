@@ -2,6 +2,7 @@ import sys
 sys.path.append(".")
 
 import gc
+import random
 
 import torch
 from torch.utils.data import Dataset
@@ -78,3 +79,11 @@ def free_gpu_memory(accelerator=None):
 
     if accelerator is not None:
         accelerator.free_memory()
+
+def seed_everything(seed):
+    generator = torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed % (2**32))
+    random.seed(seed)
+
+    return generator

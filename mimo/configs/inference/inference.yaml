@@ -33,3 +33,10 @@ noise_scheduler_kwargs:
   timestep_spacing: "trailing"
 
 sampler: DDIM 
+
+context:
+  context_frames: 20
+  context_stride: 1
+  context_overlap: 4
+  context_batch_size: 1
+  interpolation_factor: 1

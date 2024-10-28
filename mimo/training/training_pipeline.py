@@ -28,7 +28,7 @@ from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as diffusers_logging
 from diffusers.utils.import_utils import is_xformers_available
 
-from src.utils.util import seed_everything, delete_additional_ckpt
+from src.utils.util import delete_additional_ckpt
 from src.models.mutual_self_attention import ReferenceAttentionControl
 from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
@@ -36,6 +36,7 @@ from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
 
 from mimo.utils.apose_ref_utils import download_base_model, download_anyone
+from mimo.utils.torch_utils import seed_everything
 
 from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
 from mimo.training.training_dataset import TrainingDataset, collate_fn

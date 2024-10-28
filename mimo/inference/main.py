@@ -12,6 +12,8 @@ def main(
         input_video_path, 
         output_video_path=None, 
         seed=123456, 
+        num_scheduler_steps=30,
+        guidance_scale=3.5,
         weight_dtype="fp16", 
         num_workers=8, 
         cpu_memory_limit_gb=60,
@@ -31,6 +33,8 @@ def main(
 
     pipe = InferencePipeline(
         seed=seed, 
+        num_scheduler_steps=num_scheduler_steps,
+        guidance_scale=guidance_scale,
         weight_dtype=weight_dtype, 
         num_workers=num_workers,
         input_net_size=input_net_size,

@@ -4,6 +4,7 @@ sys.path.append(".")
 import tempfile
 import shutil
 import os, cv2
+import inspect
 
 def create_video_from_frames(frames, fps):
     temp_dir = tempfile.mkdtemp()
@@ -28,3 +29,15 @@ def remove_tmp_dir(video_path):
 
     if os.path.commonpath([system_temp_dir, folder_path]) == system_temp_dir:
         shutil.rmtree(folder_path)
+
+def get_extra_kwargs_scheduler(generator, eta, scheduler):
+    extra_step_kwargs = {}
+
+    scheduler_params = set(inspect.signature(scheduler.step).parameters.keys())
+    if "eta" in scheduler_params:
+        extra_step_kwargs["eta"] = eta
+
+    if "generator" in scheduler_params:
+        extra_step_kwargs["generator"] = generator
+
+    return extra_step_kwargs
