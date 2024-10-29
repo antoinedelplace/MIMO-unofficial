@@ -439,6 +439,7 @@ class InferencePipeline():
                 num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
                 progress_bar = self.get_progress_bar(self.num_scheduler_steps)
                 
+                # Possibility here to improve blending of windows by doing mean of predicted noises over several windows. This would increase compute time because some GPU / CPU transfer are needed to save GPU memory
                 for i_step, timestep in enumerate(noise_scheduler.timesteps):
                     noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, latent_pose_torch, latents, latents_scene_torch, latents_occlusion_torch, a_pose_clip)
                     latents = noise_scheduler.step(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
@@ -451,7 +452,7 @@ class InferencePipeline():
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(dataloader)-1:
-                    end = len(latents)
+                    end = len(latents)  # TODO: Error here because there is some mirroring for the last batch
                 
                 yield latents[start:end].cpu().float().numpy()
             
@@ -469,7 +470,7 @@ class InferencePipeline():
 
         return output_images
     
-    def resize_back_frames(self, frames, ori_frames, width, height, fps, output_video_path):
+    def resize_back_frames_and_save(self, frames, ori_frames, width, height, fps, output_video_path):
         output_file = cv2.VideoWriter(
             filename=output_video_path,
             fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
@@ -615,5 +616,5 @@ class InferencePipeline():
         if output_video_path is None:
             output_video_path = input_video_path.replace(".mp4", "_output.mp4")
 
-        self.resize_back_and_save(resized_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
+        self.resize_back_frames_and_save(resized_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
         return output_video_path
