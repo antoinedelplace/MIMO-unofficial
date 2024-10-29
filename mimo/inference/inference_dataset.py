@@ -14,22 +14,28 @@ from mimo.dataset_preprocessing.video_tracking_sam2 import get_index_first_frame
 from mimo.configs.paths import RASTERIZED_2D_JOINTS_FOLDER, APOSE_CLIP_EMBEDS_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, DETECTRON2_FOLDER, TRAIN_OUTPUTS
 
 
-def collate_fn(batch, weight_dtype):
+def collate_fn_rast(batch, weight_dtype):
     data_rast_2d_joints = []
-    data_scene_encoded = []
-    data_occlusion_encoded = []
-    for rast_2d_joints, latents_scene, latents_occlusion in batch:
+    for rast_2d_joints in batch:
         # the model expects RGB inputs
-        rast_2d_joints = rast_2d_joints[:, :, :, ::-1] / 255.0
-        rast_2d_joints = rast_2d_joints.transpose(0, 3, 1, 2)
+        rast_2d_joints = rast_2d_joints[:, :, ::-1] / 255.0
+        rast_2d_joints = rast_2d_joints.transpose(2, 0, 1)
         rast_2d_joints = torch.as_tensor(rast_2d_joints, dtype=weight_dtype)
         data_rast_2d_joints.append(rast_2d_joints)
 
+    return torch.stack(data_rast_2d_joints, dim=0)
+
+def collate_fn(batch, weight_dtype):
+    data_pose_encoded = []
+    data_scene_encoded = []
+    data_occlusion_encoded = []
+    for latent_pose, latents_scene, latents_occlusion in batch:
+        data_pose_encoded.append(torch.as_tensor(latent_pose, dtype=weight_dtype))
         data_scene_encoded.append(torch.as_tensor(latents_scene, dtype=weight_dtype))
         data_occlusion_encoded.append(torch.as_tensor(latents_occlusion, dtype=weight_dtype))
 
     return (
-        torch.stack(data_rast_2d_joints, dim=0),
+        torch.stack(data_pose_encoded, dim=0),
         torch.stack(data_scene_encoded, dim=0),
         torch.stack(data_occlusion_encoded, dim=0)
     )

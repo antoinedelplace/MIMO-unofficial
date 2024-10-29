@@ -35,10 +35,10 @@ from sam2.build_sam import build_sam2_video_predictor
 from mimo.training.training_utils import get_torch_weight_dtype
 from mimo.training.models import Net
 from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir, get_extra_kwargs_scheduler
-from mimo.inference.inference_dataset import InferenceDataset, collate_fn
+from mimo.inference.inference_dataset import InferenceDataset, collate_fn, collate_fn_rast
 
 from mimo.utils.general_utils import get_gpu_memory_usage
-from mimo.utils.torch_utils import free_gpu_memory, seed_everything
+from mimo.utils.torch_utils import free_gpu_memory, seed_everything, NpzDataset
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
@@ -336,18 +336,18 @@ class InferencePipeline():
         
         return noise_pred
 
-    def get_noise_pred(self, timestep, model, noise_scheduler, pose_features, latents, latents_scene, latents_occlusion, encoder_hidden_states):
+    def get_noise_pred(self, timestep, model, noise_scheduler, latent_pose, latents, latents_scene, latents_occlusion, encoder_hidden_states):
         latents = torch.cat((latents, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
         latents = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
         latents = noise_scheduler.scale_model_input(latents, timestep)
         
-        pose_features = pose_features.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
+        latent_pose = latent_pose.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
 
         noise_pred = model.denoising_unet(
             latents,
             timestep,
             encoder_hidden_states=encoder_hidden_states,
-            pose_cond_fea=pose_features,
+            pose_cond_fea=latent_pose,
             return_dict=False,
         )[0]
         
@@ -363,12 +363,12 @@ class InferencePipeline():
         
         return progress_bar
 
-    def get_dataloader(self, rast_2d_joints, latents_scene, latents_occlusion):
+    def get_dataloader(self, latent_pose, latents_scene, latents_occlusion):
         window_stride = self.batch_size_mimo - self.neighbor_context_mimo*2
         if window_stride <= 0:
             raise Exception(f"neighbor_context_mimo ({self.neighbor_context_mimo}) is too big for the given batch_size_mimo ({self.batch_size_mimo}). neighbor_context_mimo should be strictly less than half of batch_size_mimo.")
 
-        dataset = InferenceDataset(rast_2d_joints, latents_scene, latents_occlusion, self.batch_size_mimo, window_stride)
+        dataset = InferenceDataset(latent_pose, latents_scene, latents_occlusion, self.batch_size_mimo, window_stride)
         dataloader = DataLoader(
             dataset, 
             batch_size=1, 
@@ -391,51 +391,69 @@ class InferencePipeline():
         
         return encoder_hidden_states
     
-    def apply_diffusion(self, rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
-        model, reference_control_writer, reference_control_reader = self.get_model()
-        dataloader = self.get_dataloader(rast_2d_joints, latents_scene, latents_occlusion)
+    def apply_pose_guider(self, model, rast_2d_joints):
+        dataset = NpzDataset(rast_2d_joints)
+        dataloader = DataLoader(
+            dataset, 
+            batch_size=self.batch_size_mimo, 
+            shuffle=False, 
+            num_workers=self.num_workers,
+            collate_fn=lambda x: collate_fn_rast(x, self.weight_dtype),
+            pin_memory=True
+        )
+
+        with torch.no_grad():
+            model.pose_guider, dataloader = self.accelerator.prepare(model.pose_guider, dataloader)
+            model.pose_guider = model.pose_guider.to(self.weight_dtype)
+
+            for batch in tqdm(dataloader):
+                batch = batch.unsqueeze(0).transpose(1, 2)  # (b, c, f, h, w)
+                batch = model.pose_guider(batch)  # (b, c, f, h, w)
+                batch = batch.transpose(1, 2).squeeze(0)  # (f, c, h, w)
+
+                yield batch.cpu().float().numpy()
+
+    def apply_diffusion(self, model, reference_control_writer, reference_control_reader, latent_pose, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
+        dataloader = self.get_dataloader(latent_pose, latents_scene, latents_occlusion)
         noise_scheduler = self.get_noise_scheduler()
         extra_kwargs_scheduler = get_extra_kwargs_scheduler(self.generator, eta=0.0, noise_scheduler=noise_scheduler)
 
-        model, dataloader = self.accelerator.prepare(model, dataloader)
-        model = model.to(self.weight_dtype)
+        with torch.no_grad():
+            model.reference_unet, model.denoising_unet, dataloader = self.accelerator.prepare(model.reference_unet, model.denoising_unet, dataloader)
+            model.reference_unet = model.reference_unet.to(self.weight_dtype)
+            model.denoising_unet = model.denoising_unet.to(self.weight_dtype)
 
-        a_pose_clip = torch.from_numpy(a_pose_clip).to(self.weight_dtype).to(self.accelerator.device)
-        latent_apose = torch.from_numpy(latent_apose).to(self.weight_dtype).to(self.accelerator.device)
+            a_pose_clip = torch.from_numpy(a_pose_clip).to(self.weight_dtype).to(self.accelerator.device)
+            latent_apose = torch.from_numpy(latent_apose).to(self.weight_dtype).to(self.accelerator.device)
 
-        a_pose_clip = self.get_encoder_hidden_states(a_pose_clip)
+            a_pose_clip = self.get_encoder_hidden_states(a_pose_clip)
+            self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip)
 
-        self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip)
+            for i_batch, batch in enumerate(tqdm(dataloader)):
+                latent_pose_torch, latents_scene_torch, latents_occlusion_torch = batch
+                latent_pose_torch = latent_pose_torch.transpose(1, 2)  # (b, c, f, h, w)
+                latents_scene_torch = latents_scene_torch.transpose(1, 2)  # (b, c, f, h, w)
+                latents_occlusion_torch = latents_occlusion_torch.transpose(1, 2)  # (b, c, f, h, w)
+                latents = self.get_init_latent(latents_scene_torch, noise_scheduler)  # (b, c, f, h, w)
 
-        for i_batch, batch in enumerate(tqdm(dataloader)):
-            rast_2d_joints_torch, latents_scene_torch, latents_occlusion_torch = batch
-            rast_2d_joints_torch = rast_2d_joints_torch.transpose(1, 2)  # (b, c, f, h, w)
-
-            # Possibility here to load and unload pose_guider to prioritize GPU memory savings over speed
-            rast_2d_joints_torch = model.pose_guider(rast_2d_joints_torch)  # (b, c, f, h, w)
-
-            latents_scene_torch = latents_scene_torch.transpose(1, 2)  # (b, c, f, h, w)
-            latents_occlusion_torch = latents_occlusion_torch.transpose(1, 2)  # (b, c, f, h, w)
-            latents = self.get_init_latent(latents_scene_torch, noise_scheduler)  # (b, c, f, h, w)
-
-            num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
-            progress_bar = self.get_progress_bar(self.num_scheduler_steps)
+                num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
+                progress_bar = self.get_progress_bar(self.num_scheduler_steps)
+                
+                for i_step, timestep in enumerate(noise_scheduler.timesteps):
+                    noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, latent_pose_torch, latents, latents_scene_torch, latents_occlusion_torch, a_pose_clip)
+                    latents = noise_scheduler.step(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
+                    progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
+                
+                start = self.neighbor_context_mimo
+                end = -self.neighbor_context_mimo
+                if i_batch == 0:
+                    start = 0
+                if i_batch == len(dataloader)-1:
+                    end = len(latents)
+                yield latents[start:end].cpu().float().numpy()
             
-            for i_step, timestep in enumerate(noise_scheduler.timesteps):
-                noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, rast_2d_joints_torch, latents, latents_scene_torch, latents_occlusion_torch, a_pose_clip)
-                latents = noise_scheduler.step(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
-                progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
-            
-            start = self.neighbor_context_mimo
-            end = -self.neighbor_context_mimo
-            if i_batch == 0:
-                start = 0
-            if i_batch == len(dataloader)-1:
-                end = len(latents)
-            yield latents[start:end].cpu().float().numpy()
-        
-        reference_control_reader.clear()
-        reference_control_writer.clear()
+            reference_control_reader.clear()
+            reference_control_writer.clear()
 
     def get_images_from_latents(self, latents):
         download_vae()
@@ -573,7 +591,14 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        resized_frames = np.array(list(self.apply_diffusion(joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))
+        model, reference_control_writer, reference_control_reader = self.get_model()
+
+        joints2d = np.concatenate(list(self.apply_pose_guider(model, joints2d)))  # (f, c, h, w)
+        print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        resized_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))
         del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         free_gpu_memory(self.accelerator)
