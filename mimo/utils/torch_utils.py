@@ -81,9 +81,7 @@ def free_gpu_memory(accelerator=None):
         accelerator.free_memory()
 
 def seed_everything(seed):
-    generator = torch.manual_seed(seed)
+    torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed % (2**32))
     random.seed(seed)
-
-    return generator

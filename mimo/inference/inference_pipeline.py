@@ -99,7 +99,7 @@ class InferencePipeline():
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
-        self.generator = seed_everything(seed)
+        seed_everything(seed)
 
         self.weight_dtype_str = weight_dtype
         self.weight_dtype = get_torch_weight_dtype(weight_dtype)
@@ -322,7 +322,7 @@ class InferencePipeline():
         reference_control_reader.update(reference_control_writer)
 
     def get_init_latent(self, latents_scene, noise_scheduler):
-        latents = randn_tensor(latents_scene.shape, generator=self.generator, device=latents_scene.device, dtype=latents_scene.dtype)
+        latents = randn_tensor(latents_scene.shape, generator=torch.Generator(device=latents_scene.device), device=latents_scene.device, dtype=latents_scene.dtype)
         latents = latents * noise_scheduler.init_noise_sigma
 
         return latents
@@ -416,7 +416,7 @@ class InferencePipeline():
     def apply_diffusion(self, model, reference_control_writer, reference_control_reader, latent_pose, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
         dataloader = self.get_dataloader(latent_pose, latents_scene, latents_occlusion)
         noise_scheduler = self.get_noise_scheduler()
-        extra_kwargs_scheduler = get_extra_kwargs_scheduler(self.generator, eta=0.0, noise_scheduler=noise_scheduler)
+        extra_kwargs_scheduler = get_extra_kwargs_scheduler(torch.Generator(), eta=0.0, noise_scheduler=noise_scheduler)
 
         with torch.no_grad():
             model.reference_unet, model.denoising_unet, dataloader = self.accelerator.prepare(model.reference_unet, model.denoising_unet, dataloader)
@@ -444,12 +444,15 @@ class InferencePipeline():
                     latents = noise_scheduler.step(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
                     progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
                 
+                latents = latents.transpose(1, 2).squeeze(0)  # (f, c, h, w)
+
                 start = self.neighbor_context_mimo
                 end = -self.neighbor_context_mimo
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(dataloader)-1:
                     end = len(latents)
+                
                 yield latents[start:end].cpu().float().numpy()
             
             reference_control_reader.clear()
@@ -598,7 +601,7 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        resized_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))
+        resized_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))  # (f, c, h, w)
         del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         free_gpu_memory(self.accelerator)
