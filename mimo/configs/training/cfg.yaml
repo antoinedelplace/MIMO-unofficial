@@ -9,7 +9,7 @@ solver:
   mixed_precision: 'fp16'
   enable_xformers_memory_efficient_attention: True 
   gradient_checkpointing: True 
-  max_train_steps: 10000
+  max_train_steps: 20000
   max_grad_norm: 1.0
   # lr
   learning_rate: 1e-5
@@ -42,5 +42,5 @@ snr_gamma: 5.0
 enable_zero_snr: True 
 
 seed: 123456
-resume_from_checkpoint: ''
-exp_name: 'test1'
+resume_from_checkpoint: 'train_outputs/test1'
+exp_name: 'test2'
