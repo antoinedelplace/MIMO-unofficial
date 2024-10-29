@@ -23,7 +23,7 @@ def save(feature_map, basename, fps, height, width, output_folder):
     )
 
     for frame in tqdm.tqdm(feature_map):
-        output_file.write((frame * 255).clip(min=0, max=255).astype(np.uint8))
+        output_file.write(frame)
 
     output_file.release()
 
@@ -54,7 +54,7 @@ def get_rasterized_joints_2d(data_joints_2d, height, width):
     interpolated_features = interpolated_features * mask
 
     # Resulting interpolated 2D feature map (n_batch, height, width)
-    return interpolated_features.squeeze().cpu().numpy()
+    return (interpolated_features.squeeze().cpu().numpy() * 255).clip(min=0, max=255).astype(np.uint8)
     
 def run_on_video(input_path, fps, height, width, output_folder):
     basename = os.path.basename(input_path)

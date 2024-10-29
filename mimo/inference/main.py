@@ -21,7 +21,9 @@ def main(
         input_net_fps=24,
         a_pose_raw_path=os.path.join(DATA_FOLDER, "a_pose_raw.png"),
         depth_anything_encoder='vitl',
-        score_threshold_detectron2 = 0.9,
+        score_threshold_detectron2=0.9,
+        neighbor_context_mimo=4,
+        batch_size_mimo=20,
         batch_size_depth=12,
         batch_size_detectron2=32,
         batch_size_propainter=128,
@@ -42,6 +44,8 @@ def main(
         a_pose_raw_path=a_pose_raw_path,
         depth_anything_encoder=depth_anything_encoder,
         score_threshold_detectron2=score_threshold_detectron2,
+        neighbor_context_mimo=neighbor_context_mimo,
+        batch_size_mimo=batch_size_mimo,
         batch_size_depth=batch_size_depth,
         batch_size_detectron2=batch_size_detectron2,
         batch_size_propainter=batch_size_propainter,
@@ -58,7 +62,7 @@ if __name__ == "__main__":
 
 
 # accelerate config
-#    - multi-GPU
+#    - No distributed training
 #    - numa efficiency
 #    - fp16
 

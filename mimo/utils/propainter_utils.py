@@ -90,7 +90,7 @@ class ProPainterBatchPredictor():
                     start = 0
                 if i_batch == len(loader)-1:
                     end = len(update_batch_gpu)
-                yield update_batch_gpu[start:end], masks_gpu[0, start:end, 0, :, :].cpu().numpy()
+                yield update_batch_gpu[start:end], masks_gpu[0, start:end, 0, :, :].cpu().float().numpy()
 
     def load_models(self):
         ckpt_path = load_file_from_url(url=os.path.join(pretrain_model_url, 'raft-things.pth'), 

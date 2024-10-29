@@ -7,6 +7,7 @@ sys.path.append(SAM2_REPO)
 
 import os, logging, cv2
 import torch
+from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
 
@@ -19,7 +20,6 @@ from accelerate.logging import get_logger as get_accelerate_logger
 from transformers.utils import logging as transformers_logging
 
 from diffusers import DDIMScheduler
-from diffusers.optimization import get_scheduler
 from diffusers.utils import logging as diffusers_logging
 from diffusers.utils.import_utils import is_xformers_available
 from diffusers.utils.torch_utils import randn_tensor
@@ -29,13 +29,13 @@ from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
-from src.pipelines.context import get_context_scheduler
 
 from sam2.build_sam import build_sam2_video_predictor
 
 from mimo.training.training_utils import get_torch_weight_dtype
 from mimo.training.models import Net
 from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir, get_extra_kwargs_scheduler
+from mimo.inference.inference_dataset import InferenceDataset, collate_fn
 
 from mimo.utils.general_utils import get_gpu_memory_usage
 from mimo.utils.torch_utils import free_gpu_memory, seed_everything
@@ -71,6 +71,8 @@ class InferencePipeline():
             a_pose_raw_path,
             depth_anything_encoder,
             score_threshold_detectron2,
+            neighbor_context_mimo,
+            batch_size_mimo,
             batch_size_depth,
             batch_size_detectron2,
             batch_size_propainter,
@@ -86,6 +88,8 @@ class InferencePipeline():
         self.a_pose_raw_path = a_pose_raw_path
         self.depth_anything_encoder = depth_anything_encoder
         self.score_threshold_detectron2 = score_threshold_detectron2
+        self.neighbor_context_mimo = neighbor_context_mimo
+        self.batch_size_mimo = batch_size_mimo
         self.batch_size_depth = batch_size_depth
         self.batch_size_detectron2 = batch_size_detectron2
         self.batch_size_propainter = batch_size_propainter
@@ -304,7 +308,7 @@ class InferencePipeline():
 
         return data_4DH["data_joints_2d"]
 
-    def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip, timestep):
+    def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip):
         encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
         if self.do_classifier_free_guidance:
             uncond_encoder_hidden_states = torch.zeros_like(encoder_hidden_states)
@@ -312,50 +316,28 @@ class InferencePipeline():
             encoder_hidden_states = torch.cat(
                 [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
             ) # (2b, 1, d)
+        
+        t = torch.zeros((1), dtype=latent_apose.dtype, device=latent_apose.device)
 
         model.reference_unet(
             latent_apose.repeat(
                 (2 if self.do_classifier_free_guidance else 1), 1, 1, 1
             ),  # (2b, c, h, w) or (b, c, h, w)
-            torch.zeros_like(timestep),
+            t,
             encoder_hidden_states=encoder_hidden_states,
             return_dict=False,
         )
         reference_control_reader.update(reference_control_writer)
 
     def get_init_latent(self, latents_scene, noise_scheduler):
-        latents = randn_tensor(latents_scene.shape, generator=self.generator)
+        latents = randn_tensor(latents_scene.shape, generator=self.generator, device=latents_scene.device, dtype=latents_scene.dtype)
         latents = latents * noise_scheduler.init_noise_sigma
 
         return latents
-    
-    def get_global_context(self, nb_frames):
-        context_scheduler = get_context_scheduler("uniform")
 
-        context_queue = list(
-            context_scheduler(
-                step=0,
-                num_steps=self.num_inference_steps,
-                num_frames=nb_frames,
-                context_size=self.infer_cfg.context.context_frames,
-                context_stride=self.infer_cfg.context_stride,
-                context_overlap=self.infer_cfg.context_overlap,
-            )
-        )
-        num_context_batches = np.ceil(len(context_queue) / self.infer_cfg.context_batch_size)
-        global_context = []
-        for i in range(num_context_batches):
-            global_context.append(
-                context_queue[
-                i * self.infer_cfg.context_batch_size: (i + 1) * self.infer_cfg.context_batch_size
-                ]
-            )
-        
-        return global_context
-
-    def apply_guidance(self, noise_pred, counter):
+    def apply_guidance(self, noise_pred):
         if self.do_classifier_free_guidance:
-            noise_pred_uncond, noise_pred_text = (noise_pred / counter).chunk(2)  # Mean along context
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
             noise_pred = noise_pred_uncond + self.guidance_scale * (
                 noise_pred_text - noise_pred_uncond
             )
@@ -365,35 +347,20 @@ class InferencePipeline():
     def get_noise_pred(self, timestep, model, a_pose_clip, noise_scheduler, pose_features, latents):
         encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
 
-        (b, c, f, h, w) = latents.shape
+        latent_model_input = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
+        latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
         
-        noise_pred = torch.zeros((b * (2 if self.do_classifier_free_guidance else 1), c, f, h, w))  # (2b, c, f, h, w) or (b, c, f, h, w)
-        counter = torch.zeros((1, 1, f, 1, 1))
+        latent_pose_input = pose_features.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
 
-        for context in self.get_global_context(latents.shape[2]):
-            latent_model_input = (
-                torch.cat([latents[:, :, i_f] for i_f in context])
-                .repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
-            )  # (2b, c, len(context), h, w) or (b, c, len(context), h, w)
-            latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
-            
-            latent_pose_input = torch.cat(
-                [pose_features[:, :, i_f] for i_f in context]
-            ).repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, len(context), h, w) or (b, c, len(context), h, w)
-
-            pred = model.denoising_unet(
-                latent_model_input,
-                timestep,
-                encoder_hidden_states=encoder_hidden_states,
-                pose_cond_fea=latent_pose_input,
-                return_dict=False,
-            )[0]
-
-            for i_f in context:
-                noise_pred[:, :, i_f] = noise_pred[:, :, i_f] + pred
-                counter[:, :, i_f] = counter[:, :, i_f] + 1
+        noise_pred = model.denoising_unet(
+            latent_model_input,
+            timestep,
+            encoder_hidden_states=encoder_hidden_states,
+            pose_cond_fea=latent_pose_input,
+            return_dict=False,
+        )[0]
         
-        noise_pred = self.apply_guidance(noise_pred, counter)
+        noise_pred = self.apply_guidance(noise_pred)
         
         return noise_pred
     
@@ -405,34 +372,97 @@ class InferencePipeline():
         
         return progress_bar
 
+    def get_dataloader(self, rast_2d_joints, latents_scene, latents_occlusion):
+        window_stride = self.batch_size_mimo - self.neighbor_context_mimo*2
+
+        dataset = InferenceDataset(rast_2d_joints, latents_scene, latents_occlusion, self.batch_size_mimo, window_stride)
+        dataloader = DataLoader(
+            dataset, 
+            batch_size=1, 
+            shuffle=False, 
+            num_workers=self.num_workers,
+            collate_fn=lambda x: collate_fn(x, self.weight_dtype),
+            pin_memory=True
+        )
+
+        return dataloader
+    
     def apply_diffusion(self, rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
         model, reference_control_writer, reference_control_reader = self.get_model()
-
+        dataloader = self.get_dataloader(rast_2d_joints, latents_scene, latents_occlusion)
         noise_scheduler = self.get_noise_scheduler()
         extra_kwargs_scheduler = get_extra_kwargs_scheduler(self.generator, eta=0.0, noise_scheduler=noise_scheduler)
 
-        model = self.accelerator.prepare(model)
+        model, dataloader = self.accelerator.prepare(model, dataloader)
+        model = model.to(self.weight_dtype)
 
-        num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
-        progress_bar = self.get_progress_bar(self.num_scheduler_steps)
+        a_pose_clip = torch.from_numpy(a_pose_clip).to(self.weight_dtype).to(self.accelerator.device)
+        latent_apose = torch.from_numpy(latent_apose).to(self.weight_dtype).to(self.accelerator.device)
 
-        self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip, timestep)
+        self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip)
 
-        rast_2d_joints = rast_2d_joints.transpose(1, 2)  # (b, c, f, h, w)
-        pose_features = self.pose_guider(rast_2d_joints)  # (b, c, f, h, w)
+        for i_batch, batch in enumerate(tqdm(dataloader)):
+            rast_2d_joints_torch, latents_scene_torch, latents_occlusion_torch = batch
+            rast_2d_joints_torch = rast_2d_joints_torch.transpose(1, 2)  # (b, c, f, h, w)
+            pose_features = model.pose_guider(rast_2d_joints_torch)  # (b, c, f, h, w)
 
-        latents_scene = latents_scene.transpose(1, 2)  # (b, c, f, h, w)
-        latents_occlusion = latents_occlusion.transpose(1, 2)  # (b, c, f, h, w)
-        noisy_latent_video = self.get_init_latent(latents_scene, noise_scheduler)  # (b, c, f, h, w)
-        latents = torch.cat((noisy_latent_video, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
-        
-        for i_step, timestep in enumerate(noise_scheduler.timesteps):
-            noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, a_pose_clip, pose_features, latents)
-            latents = noise_scheduler(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
-            progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
+            latents_scene_torch = latents_scene_torch.transpose(1, 2)  # (b, c, f, h, w)
+            latents_occlusion_torch = latents_occlusion_torch.transpose(1, 2)  # (b, c, f, h, w)
+            noisy_latent_video = self.get_init_latent(latents_scene_torch, noise_scheduler)  # (b, c, f, h, w)
+            latents = torch.cat((noisy_latent_video, latents_scene_torch, latents_occlusion_torch), dim=1)  # (b, c+c+c, f, h, w)
+
+            num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
+            progress_bar = self.get_progress_bar(self.num_scheduler_steps)
+            
+            for i_step, timestep in enumerate(noise_scheduler.timesteps):
+                noise_pred = self.get_noise_pred(timestep, model, a_pose_clip, noise_scheduler, pose_features, latents)
+                latents = noise_scheduler(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
+                progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
+            
+            start = self.neighbor_context_mimo
+            end = -self.neighbor_context_mimo
+            if i_batch == 0:
+                start = 0
+            if i_batch == len(dataloader)-1:
+                end = len(latents)
+            yield latents[start:end].cpu().float().numpy()
         
         reference_control_reader.clear()
         reference_control_writer.clear()
+
+    def get_images_from_latents(self, latents):
+        download_vae()
+
+        vae = VaeBatchPredictor(self.batch_size_vae, self.num_workers)
+
+        vae.vae = self.accelerator.prepare(vae.vae)
+
+        output_images = np.concatenate(list(vae.decode(latents)))
+
+        return output_images
+    
+    def resize_back_frames(self, frames, ori_frames, width, height, fps, output_video_path):
+        output_file = cv2.VideoWriter(
+            filename=output_video_path,
+            fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+            fps=fps,
+            frameSize=(width, height),
+            isColor=True,
+        )
+        
+        for frame in frames:
+            if width < height:
+                scale = self.input_net_size/height
+                frame = frame[int(scale*(height-width)//2): -int(scale*(height-width+1)//2), :]
+                ori_frames = cv2.resize(frame, (width, height), interpolation = cv2.INTER_LINEAR)
+            else:
+                scale = self.input_net_size/width
+                frame = cv2.resize(frame, (height, height), interpolation = cv2.INTER_LINEAR)
+                ori_frames[width//2-height//2: width//2+(height+1)//2, :] = frame
+            
+            output_file.write(ori_frames)
+        
+        output_file.release()
 
     def __call__(self, input_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
@@ -450,81 +480,105 @@ class InferencePipeline():
         print("frames_per_second", frames_per_second)
         print("num_frames", num_frames)
 
-        frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
+        # frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
+        frame_gen = np.zeros((50, 814, 468, 3))
         print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
         video.release()
         get_gpu_memory_usage()
 
-        resized_frames = np.array(sampling_resizing(frame_gen, 
-                                           frames_per_second, 
-                                           output_fps=self.input_net_fps, 
-                                           input_size=(width, height), 
-                                           output_width=self.input_net_size))
+        # resized_frames = np.array(sampling_resizing(frame_gen, 
+        #                                    frames_per_second, 
+        #                                    output_fps=self.input_net_fps, 
+        #                                    input_size=(width, height), 
+        #                                    output_width=self.input_net_size))
+        resized_frames = np.zeros((39, 768, 768, 3))
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         get_gpu_memory_usage()
 
-        depth_frames = np.concatenate(self.depth_estimation(resized_frames))
+        # depth_frames = np.concatenate(self.depth_estimation(resized_frames))
+        depth_frames = np.zeros((39, 768, 768, 3))
         print("np.shape(depth_frames)", np.shape(depth_frames), type(depth_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        detectron2_output = self.get_detectron2_output(resized_frames)
-        print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']), type(detectron2_output['data_frame_index']))
-        print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']), type(detectron2_output['data_pred_boxes']))
-        print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']), type(detectron2_output['data_scores']))
-        print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
-        print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
+        # detectron2_output = self.get_detectron2_output(resized_frames)
+        # print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']), type(detectron2_output['data_frame_index']))
+        # print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']), type(detectron2_output['data_pred_boxes']))
+        # print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']), type(detectron2_output['data_scores']))
+        # print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
+        # print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
+        # input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
 
-        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
-        del human_frames, detectron2_output, depth_frames
-        occlusion_frames = np.array(occlusion_frames)
-        scene_frames = np.array(scene_frames)
+        # human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
+        # del human_frames, detectron2_output, depth_frames
+        # occlusion_frames = np.array(occlusion_frames)
+        # scene_frames = np.array(scene_frames)
+        occlusion_frames = np.zeros((39, 768, 768, 3))
+        scene_frames = np.zeros((39, 768, 768, 3))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        joints2d = self.get_joints2d(input_video_path)
+        # joints2d = self.get_joints2d(input_video_path)
+        joints2d = np.zeros((39, 45, 2))
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        remove_tmp_dir(input_video_path)
+        # remove_tmp_dir(input_video_path)
 
-        joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
+        # joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
+        joints2d = np.zeros((39, 768, 768, 3))
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
+        # scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
+        scene_frames = np.zeros((39, 768, 768, 3))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        apose_ref = self.get_apose_ref(resized_frames)
+        # apose_ref = self.get_apose_ref(resized_frames)
+        apose_ref = np.zeros((768, 768, 3))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        clip_embeddings = self.clip_apose(apose_ref)
+        # clip_embeddings = self.clip_apose(apose_ref)
+        clip_embeddings = np.zeros((1, 768))
         print("np.shape(clip_embeddings)", np.shape(clip_embeddings), type(clip_embeddings))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
-        del resized_frames
+        # scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
+        # del resized_frames
+        scene_frames = np.zeros((39, 4, 96, 96))
+        occlusion_frames = np.zeros((39, 4, 96, 96))
+        apose_ref = np.zeros((1, 4, 96, 96))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        resized_frames = self.apply_diffusion(joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)
+        resized_frames = np.array(list(self.apply_diffusion(joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))
         del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
+
+        resized_frames = self.get_images_from_latents(resized_frames)
+        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        if output_video_path is None:
+            output_video_path = input_video_path.replace(".mp4", "_output.mp4")
+
+        self.resize_back_and_save(resized_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
+        return output_video_path

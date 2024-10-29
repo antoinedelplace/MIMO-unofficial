@@ -24,3 +24,12 @@ def frame_from_video(video, index):
         return frame
     else:
         raise ValueError(f"Could not read frame {index} from video.")
+
+def save_video(video_path, fps, width, height, frames):
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec
+    out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
+
+    for frame in frames:
+        out.write(frame)
+
+    out.release()

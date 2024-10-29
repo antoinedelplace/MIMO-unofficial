@@ -3,8 +3,10 @@ sys.path.append(".")
 
 import tempfile
 import shutil
-import os, cv2
+import os
 import inspect
+
+from mimo.utils.video_utils import save_video
 
 def create_video_from_frames(frames, fps):
     temp_dir = tempfile.mkdtemp()
@@ -13,13 +15,7 @@ def create_video_from_frames(frames, fps):
 
     width, height, _ = frames[0].shape
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec
-    out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
-
-    for frame in frames:
-        out.write(frame)
-
-    out.release()
+    save_video(video_path, fps, width, height, frames)
 
     return video_path
 
