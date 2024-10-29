@@ -308,15 +308,7 @@ class InferencePipeline():
 
         return data_4DH["data_joints_2d"]
 
-    def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip):
-        encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
-        if self.do_classifier_free_guidance:
-            uncond_encoder_hidden_states = torch.zeros_like(encoder_hidden_states)
-
-            encoder_hidden_states = torch.cat(
-                [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
-            ) # (2b, 1, d)
-        
+    def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, encoder_hidden_states):
         t = torch.zeros((1), dtype=latent_apose.dtype, device=latent_apose.device)
 
         model.reference_unet(
@@ -344,19 +336,18 @@ class InferencePipeline():
         
         return noise_pred
 
-    def get_noise_pred(self, timestep, model, a_pose_clip, noise_scheduler, pose_features, latents):
-        encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
-
-        latent_model_input = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
-        latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
+    def get_noise_pred(self, timestep, model, noise_scheduler, pose_features, latents, latents_scene, latents_occlusion, encoder_hidden_states):
+        latents = torch.cat((latents, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
+        latents = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
+        latents = noise_scheduler.scale_model_input(latents, timestep)
         
-        latent_pose_input = pose_features.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
+        pose_features = pose_features.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
 
         noise_pred = model.denoising_unet(
-            latent_model_input,
+            latents,
             timestep,
             encoder_hidden_states=encoder_hidden_states,
-            pose_cond_fea=latent_pose_input,
+            pose_cond_fea=pose_features,
             return_dict=False,
         )[0]
         
@@ -374,6 +365,8 @@ class InferencePipeline():
 
     def get_dataloader(self, rast_2d_joints, latents_scene, latents_occlusion):
         window_stride = self.batch_size_mimo - self.neighbor_context_mimo*2
+        if window_stride <= 0:
+            raise Exception(f"neighbor_context_mimo ({self.neighbor_context_mimo}) is too big for the given batch_size_mimo ({self.batch_size_mimo}). neighbor_context_mimo should be strictly less than half of batch_size_mimo.")
 
         dataset = InferenceDataset(rast_2d_joints, latents_scene, latents_occlusion, self.batch_size_mimo, window_stride)
         dataloader = DataLoader(
@@ -387,6 +380,17 @@ class InferencePipeline():
 
         return dataloader
     
+    def get_encoder_hidden_states(self, a_pose_clip):
+        encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
+        if self.do_classifier_free_guidance:
+            uncond_encoder_hidden_states = torch.zeros_like(encoder_hidden_states)
+
+            encoder_hidden_states = torch.cat(
+                [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
+            ) # (2b, 1, d)
+        
+        return encoder_hidden_states
+    
     def apply_diffusion(self, rast_2d_joints, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
         model, reference_control_writer, reference_control_reader = self.get_model()
         dataloader = self.get_dataloader(rast_2d_joints, latents_scene, latents_occlusion)
@@ -399,24 +403,27 @@ class InferencePipeline():
         a_pose_clip = torch.from_numpy(a_pose_clip).to(self.weight_dtype).to(self.accelerator.device)
         latent_apose = torch.from_numpy(latent_apose).to(self.weight_dtype).to(self.accelerator.device)
 
+        a_pose_clip = self.get_encoder_hidden_states(a_pose_clip)
+
         self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip)
 
         for i_batch, batch in enumerate(tqdm(dataloader)):
             rast_2d_joints_torch, latents_scene_torch, latents_occlusion_torch = batch
             rast_2d_joints_torch = rast_2d_joints_torch.transpose(1, 2)  # (b, c, f, h, w)
-            pose_features = model.pose_guider(rast_2d_joints_torch)  # (b, c, f, h, w)
+
+            # Possibility here to load and unload pose_guider to prioritize GPU memory savings over speed
+            rast_2d_joints_torch = model.pose_guider(rast_2d_joints_torch)  # (b, c, f, h, w)
 
             latents_scene_torch = latents_scene_torch.transpose(1, 2)  # (b, c, f, h, w)
             latents_occlusion_torch = latents_occlusion_torch.transpose(1, 2)  # (b, c, f, h, w)
-            noisy_latent_video = self.get_init_latent(latents_scene_torch, noise_scheduler)  # (b, c, f, h, w)
-            latents = torch.cat((noisy_latent_video, latents_scene_torch, latents_occlusion_torch), dim=1)  # (b, c+c+c, f, h, w)
+            latents = self.get_init_latent(latents_scene_torch, noise_scheduler)  # (b, c, f, h, w)
 
             num_warmup_steps = len(noise_scheduler.timesteps) - self.num_scheduler_steps * noise_scheduler.order
             progress_bar = self.get_progress_bar(self.num_scheduler_steps)
             
             for i_step, timestep in enumerate(noise_scheduler.timesteps):
-                noise_pred = self.get_noise_pred(timestep, model, a_pose_clip, noise_scheduler, pose_features, latents)
-                latents = noise_scheduler(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
+                noise_pred = self.get_noise_pred(timestep, model, noise_scheduler, rast_2d_joints_torch, latents, latents_scene_torch, latents_occlusion_torch, a_pose_clip)
+                latents = noise_scheduler.step(noise_pred, timestep, latents, **extra_kwargs_scheduler).prev_sample
                 progress_bar = self.update_progress_bar(progress_bar, i_step, noise_scheduler, num_warmup_steps)
             
             start = self.neighbor_context_mimo
