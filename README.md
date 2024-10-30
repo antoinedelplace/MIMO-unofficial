@@ -4,7 +4,10 @@ Unofficial implementation of MIMO (MImicking anyone anywhere with complex Motion
 My blog post: [![Medium](https://img.shields.io/badge/Medium-12100E?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@delplaceantoine/mastering-mimo-mimicking-anyone-anywhere-with-complex-motions-and-object-interactions-e8598d9d97d6)
 Original paper: [![arXiv](https://img.shields.io/badge/arXiv-2409.16160-00ff00.svg)](https://arxiv.org/abs/2409.16160)
 
-## Installation and Setup
+## 🎯 Overview
+This repository offers a comprehensive pipeline for training and inference to transform character appearances and motions in videos. As part of the video-to-video generation category, this framework enables dynamic character modification with optional inputs, including an avatar photo and/or 3D animations.
+
+## ⚒️ Installation and Setup
 Tests were made using:
 ```bash
 Cuda 12.2
@@ -110,7 +113,7 @@ See `configs/paths.py`
     ```
 
 
-## Run scripts
+## 🚀 Run scripts
 ### Dataset Preprocessing
 1. `mimo/dataset_preprocessing/video_sampling_resizing.py`
 1. `mimo/dataset_preprocessing/remove_duplicate_videos.py`
@@ -124,6 +127,25 @@ See `configs/paths.py`
 1. `mimo/dataset_preprocessing/pose_estimation_4DH.py`
 1. `mimo/dataset_preprocessing/rasterizer_2d_joints.py`
 
+### Inference
+```bash
+accelerate config
+    - No distributed training
+    - numa efficiency
+    - fp16
 
-## Note
-- The 45 2D joints are composed of 25+20 joints corresponding to 25 openpose joints and 20 other joints (part of Opentrack?)
+accelerate launch mimo/inference/main.py -i input_video.mp4
+```
+
+### Training
+```bash
+accelerate config
+   - multi-GPU
+   - numa efficiency
+   - fp16
+
+accelerate launch mimo/training/main.py -c 1540
+```
+
+## 🙏🏻 Acknowledgements
+This project is based on [novitalabs/AnimateAnyone](https://github.com/novitalabs/AnimateAnyone) and [MooreThreads/Moore-AnimateAnyone](https://github.com/MooreThreads/Moore-AnimateAnyone) which is licensed under the Apache License 2.0. We thank to the authors of [MIMO](https://menyifang.github.io/projects/MIMO/index.html), [novitalabs/AnimateAnyone](https://github.com/novitalabs/AnimateAnyone) and [MooreThreads/Moore-AnimateAnyone](https://github.com/MooreThreads/Moore-AnimateAnyone), for their open research and exploration.
