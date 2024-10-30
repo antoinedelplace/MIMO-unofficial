@@ -10,6 +10,8 @@ from mimo.configs.paths import DATA_FOLDER
 
 def main(
         input_video_path, 
+        avatar_image_path=None,
+        motion_video_path=None,
         output_video_path=None, 
         seed=123456, 
         num_scheduler_steps=30,
@@ -54,7 +56,7 @@ def main(
         batch_size_vae=batch_size_vae,
     )
 
-    pipe(input_video_path, output_video_path)
+    pipe(input_video_path, avatar_image_path, motion_video_path, output_video_path)
 
 if __name__ == "__main__":
     args = parse_args(main)
@@ -66,4 +68,4 @@ if __name__ == "__main__":
 #    - numa efficiency
 #    - fp16
 
-# accelerate launch mimo/inference/main.py -i ../../data/mimo_video_cropped/demo_motion_parkour.mp4
+# accelerate launch mimo/inference/main.py -i ../../data/mimo_video_cropped/demo_motion_parkour.mp4 -a ../../data/iron_man.jpg

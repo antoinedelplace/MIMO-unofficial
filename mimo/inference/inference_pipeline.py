@@ -499,7 +499,7 @@ class InferencePipeline():
         for frame in frames:
             if width < height:
                 scale = self.input_net_size/height
-                frame = frame[int(scale*(height-width)//2): -int(scale*(height-width+1)//2), :]
+                frame = frame[:, int(scale*(height-width)//2): -int(scale*(height-width+1)//2)]
                 ori_frames = cv2.resize(frame, (width, height), interpolation = cv2.INTER_LINEAR)
             else:
                 scale = self.input_net_size/width
@@ -526,7 +526,7 @@ class InferencePipeline():
 
         video2.release()
 
-    def __call__(self, input_video_path, output_video_path):
+    def __call__(self, input_video_path, input_avatar_image_path, input_motion_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
 
         video = cv2.VideoCapture(input_video_path)
@@ -580,7 +580,10 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        joints2d = self.get_joints2d(temp_input_video_path)
+        if input_motion_video_path is not None:
+            joints2d = self.get_joints2d(input_motion_video_path)
+        else:
+            joints2d = self.get_joints2d(temp_input_video_path)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
@@ -597,7 +600,11 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        apose_ref = self.get_apose_ref(resized_frames)
+        if input_avatar_image_path is not None:
+            avatar_image = cv2.imread(input_avatar_image_path)
+            apose_ref = self.get_apose_ref([avatar_image])
+        else:
+            apose_ref = self.get_apose_ref(resized_frames)
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
