@@ -68,3 +68,13 @@ def save_checkpoint(model, save_dir, modules_to_save, ckpt_num, logger, total_li
                 mm_state_dict[key] = state_dict[key]
 
         torch.save(mm_state_dict, save_path)
+
+def get_last_checkpoint(folder):
+    dirs = os.listdir(folder)
+    dirs = [d for d in dirs if d.startswith("checkpoint")]
+    dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
+    
+    path = dirs[-1]
+    global_step = int(path.split("-")[1])
+
+    return path, global_step

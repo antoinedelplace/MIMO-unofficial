@@ -1,18 +1,9 @@
 import sys
 sys.path.append(".")
 
-import h5py
-import os, cv2, torch
+import torch
 import numpy as np
 from torch.utils.data import Dataset
-
-from mimo.utils.video_utils import frame_gen_from_video
-from mimo.utils.general_utils import try_wrapper
-
-from mimo.dataset_preprocessing.video_tracking_sam2 import get_index_first_frame_with_character
-
-from mimo.configs.paths import RASTERIZED_2D_JOINTS_FOLDER, APOSE_CLIP_EMBEDS_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, DETECTRON2_FOLDER, TRAIN_OUTPUTS
-
 
 def collate_fn_rast(batch, weight_dtype):
     data_rast_2d_joints = []
@@ -60,11 +51,17 @@ class InferenceDataset(Dataset):
         self.window_length = window_length
         self.window_stride = window_stride
 
-        self.num_windows = (len(self.rast_2d_joints)+self.window_stride-1) // self.window_stride
+        self.num_frames = len(self.rast_2d_joints)
+
+        self.num_windows = (max(0, self.num_frames-self.window_length)+1+self.window_stride-1) // self.window_stride
 
     def __getitem__(self, index):
         start = index * self.window_stride
         end = start + self.window_length
+
+        if end > self.num_frames:
+            start = self.num_frames - self.window_length
+            end = self.num_frames
 
         rast_2d = mirror_padding(self.rast_2d_joints, start, end, self.window_length)
         latents_scene = mirror_padding(self.latents_scene, start, end, self.window_length)

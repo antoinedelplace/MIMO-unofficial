@@ -38,7 +38,7 @@ from src.models.resnet import InflatedConv3d
 from mimo.utils.apose_ref_utils import download_base_model, download_anyone
 from mimo.utils.torch_utils import seed_everything
 
-from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint
+from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint, get_last_checkpoint
 from mimo.training.training_dataset import TrainingDataset, collate_fn
 from mimo.training.models import Net
 
@@ -319,14 +319,11 @@ class TrainingPipeline:
                 resume_dir = self.cfg.resume_from_checkpoint
             else:
                 resume_dir = self.save_dir
-            # Get the most recent checkpoint
-            dirs = os.listdir(resume_dir)
-            dirs = [d for d in dirs if d.startswith("checkpoint")]
-            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
-            path = dirs[-1]
+            
+            path, global_step = get_last_checkpoint(resume_dir)
+            
             self.accelerator.load_state(os.path.join(resume_dir, path))
             self.accelerator.print(f"Resuming from checkpoint {path}")
-            global_step = int(path.split("-")[1])
 
             first_epoch = global_step // num_update_steps_per_epoch
             resume_step = global_step % num_update_steps_per_epoch

@@ -13,6 +13,8 @@ from tqdm import tqdm
 
 from omegaconf import OmegaConf
 
+from safetensors.torch import load_file
+
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
 from accelerate.logging import get_logger as get_accelerate_logger
@@ -32,7 +34,7 @@ from src.models.resnet import InflatedConv3d
 
 from sam2.build_sam import build_sam2_video_predictor
 
-from mimo.training.training_utils import get_torch_weight_dtype
+from mimo.training.training_utils import get_torch_weight_dtype, get_last_checkpoint
 from mimo.training.models import Net
 from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir, get_extra_kwargs_scheduler
 from mimo.inference.inference_dataset import InferenceDataset, collate_fn, collate_fn_rast
@@ -195,6 +197,15 @@ class InferencePipeline():
             reference_control_writer,
             reference_control_reader,
         )
+
+        if self.infer_cfg.load_from_checkpoint:
+            if self.infer_cfg.load_from_checkpoint.endswith(".safetensors"):
+                checkpoint_path = self.infer_cfg.load_from_checkpoint
+            else:
+                path, global_step = get_last_checkpoint(self.infer_cfg.load_from_checkpoint)
+                checkpoint_path = os.path.join(self.infer_cfg.load_from_checkpoint, path, "model.safetensors")
+            checkpoint = load_file(checkpoint_path)
+            model.load_state_dict(checkpoint)
         
         return model, reference_control_writer, reference_control_reader
 
@@ -414,6 +425,8 @@ class InferencePipeline():
                 yield batch.cpu().float().numpy()
 
     def apply_diffusion(self, model, reference_control_writer, reference_control_reader, latent_pose, a_pose_clip, latents_scene, latents_occlusion, latent_apose):
+        num_frames = len(latent_pose)
+
         dataloader = self.get_dataloader(latent_pose, latents_scene, latents_occlusion)
         noise_scheduler = self.get_noise_scheduler()
         extra_kwargs_scheduler = get_extra_kwargs_scheduler(torch.Generator(), eta=0.0, noise_scheduler=noise_scheduler)
@@ -429,6 +442,7 @@ class InferencePipeline():
             a_pose_clip = self.get_encoder_hidden_states(a_pose_clip)
             self.apply_reference_image(model, reference_control_reader, reference_control_writer, latent_apose, a_pose_clip)
 
+            count_frames = 0
             for i_batch, batch in enumerate(tqdm(dataloader)):
                 latent_pose_torch, latents_scene_torch, latents_occlusion_torch = batch
                 latent_pose_torch = latent_pose_torch.transpose(1, 2)  # (b, c, f, h, w)
@@ -452,9 +466,17 @@ class InferencePipeline():
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(dataloader)-1:
-                    end = len(latents)  # TODO: Error here because there is some mirroring for the last batch
+                    start = len(latents) - (num_frames-count_frames+1)
+                    end = len(latents)
                 
-                yield latents[start:end].cpu().float().numpy()
+                output = latents[start:end].cpu().float().numpy()
+                count_frames += len(output)
+                print("start", start)
+                print("end", end)
+                print("count_frames", count_frames)
+                print("len(latents)", len(latents))
+                print("len(output)", len(output))
+                yield output
             
             reference_control_reader.clear()
             reference_control_writer.clear()
@@ -492,6 +514,22 @@ class InferencePipeline():
             output_file.write(ori_frames)
         
         output_file.release()
+        print(f"Output video saved here: {output_video_path}")
+
+        video2 = cv2.VideoCapture(output_video_path)
+
+        basename = os.path.basename(output_video_path)
+        width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames_per_second = video2.get(cv2.CAP_PROP_FPS)
+        num_frames = int(video2.get(cv2.CAP_PROP_FRAME_COUNT))
+        print("basename", basename)
+        print("width", width)
+        print("height", height)
+        print("frames_per_second", frames_per_second)
+        print("num_frames", num_frames)
+
+        video2.release()
 
     def __call__(self, input_video_path, output_video_path):
         free_gpu_memory(self.accelerator)

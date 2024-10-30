@@ -33,3 +33,5 @@ noise_scheduler_kwargs:
   timestep_spacing: "trailing"
 
 sampler: DDIM
+
+load_from_checkpoint: 'train_outputs/test1'
