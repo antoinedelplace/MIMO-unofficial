@@ -569,9 +569,9 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
+        temp_input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
 
-        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
+        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(temp_input_video_path, resized_frames, detectron2_output, depth_frames)
         del human_frames, detectron2_output, depth_frames
         occlusion_frames = np.array(occlusion_frames)
         scene_frames = np.array(scene_frames)
@@ -580,12 +580,12 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        joints2d = self.get_joints2d(input_video_path)
+        joints2d = self.get_joints2d(temp_input_video_path)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        remove_tmp_dir(input_video_path)
+        remove_tmp_dir(temp_input_video_path)
 
         joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
