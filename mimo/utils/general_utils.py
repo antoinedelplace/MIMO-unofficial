@@ -95,7 +95,10 @@ def parse_args(main_function):
             param_call = (f'--{param_name}',)
 
         if param.default is not inspect.Parameter.empty:
-            param_type = type(param.default)
+            if param.default is not None:
+                param_type = type(param.default)
+            else:
+                param_type = str
             parser.add_argument(*param_call, type=param_type, default=param.default,
                                 help=f"Automatically detected argument: {param_name}, default: {param.default}")
         else:
