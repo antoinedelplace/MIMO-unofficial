@@ -53,7 +53,7 @@ class InferenceDataset(Dataset):
 
         self.num_frames = len(self.rast_2d_joints)
 
-        self.num_windows = (max(0, self.num_frames-self.window_length)+1+self.window_stride-1) // self.window_stride
+        self.num_windows = ((max(0, self.num_frames - self.window_length) + self.window_stride - 1) // self.window_stride) + 1
 
     def __getitem__(self, index):
         start = index * self.window_stride

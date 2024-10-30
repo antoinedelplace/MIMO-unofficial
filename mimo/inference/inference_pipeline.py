@@ -466,16 +466,11 @@ class InferencePipeline():
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(dataloader)-1:
-                    start = len(latents) - (num_frames-count_frames+1)
+                    start = len(latents) - (num_frames-count_frames)
                     end = len(latents)
                 
                 output = latents[start:end].cpu().float().numpy()
                 count_frames += len(output)
-                print("start", start)
-                print("end", end)
-                print("count_frames", count_frames)
-                print("len(latents)", len(latents))
-                print("len(output)", len(output))
                 yield output
             
             reference_control_reader.clear()
@@ -547,86 +542,73 @@ class InferencePipeline():
         print("frames_per_second", frames_per_second)
         print("num_frames", num_frames)
 
-        # frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
-        frame_gen = np.zeros((50, 814, 468, 3))
+        frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
         print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
         video.release()
         get_gpu_memory_usage()
 
-        # resized_frames = np.array(sampling_resizing(frame_gen, 
-        #                                    frames_per_second, 
-        #                                    output_fps=self.input_net_fps, 
-        #                                    input_size=(width, height), 
-        #                                    output_width=self.input_net_size))
-        resized_frames = np.zeros((39, 768, 768, 3))
+        resized_frames = np.array(sampling_resizing(frame_gen, 
+                                           frames_per_second, 
+                                           output_fps=self.input_net_fps, 
+                                           input_size=(width, height), 
+                                           output_width=self.input_net_size))
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         get_gpu_memory_usage()
 
-        # depth_frames = np.concatenate(self.depth_estimation(resized_frames))
-        depth_frames = np.zeros((39, 768, 768, 3))
+        depth_frames = np.concatenate(self.depth_estimation(resized_frames))
         print("np.shape(depth_frames)", np.shape(depth_frames), type(depth_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # detectron2_output = self.get_detectron2_output(resized_frames)
-        # print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']), type(detectron2_output['data_frame_index']))
-        # print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']), type(detectron2_output['data_pred_boxes']))
-        # print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']), type(detectron2_output['data_scores']))
-        # print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
-        # print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
+        detectron2_output = self.get_detectron2_output(resized_frames)
+        print("np.shape(detectron2_output['data_frame_index'])", np.shape(detectron2_output['data_frame_index']), type(detectron2_output['data_frame_index']))
+        print("np.shape(detectron2_output['data_pred_boxes'])", np.shape(detectron2_output['data_pred_boxes']), type(detectron2_output['data_pred_boxes']))
+        print("np.shape(detectron2_output['data_scores'])", np.shape(detectron2_output['data_scores']), type(detectron2_output['data_scores']))
+        print("np.shape(detectron2_output['data_pred_classes'])", np.shape(detectron2_output['data_pred_classes']), type(detectron2_output['data_pred_classes']))
+        print("np.shape(detectron2_output['data_pred_masks'])", np.shape(detectron2_output['data_pred_masks']), type(detectron2_output['data_pred_masks']))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
+        input_video_path = create_video_from_frames(resized_frames, self.input_net_fps)  # for SAM2 and 4DH
 
-        # human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
-        # del human_frames, detectron2_output, depth_frames
-        # occlusion_frames = np.array(occlusion_frames)
-        # scene_frames = np.array(scene_frames)
-        occlusion_frames = np.zeros((39, 768, 768, 3))
-        scene_frames = np.zeros((39, 768, 768, 3))
+        human_frames, occlusion_frames, scene_frames = self.get_layers_sam2(input_video_path, resized_frames, detectron2_output, depth_frames)
+        del human_frames, detectron2_output, depth_frames
+        occlusion_frames = np.array(occlusion_frames)
+        scene_frames = np.array(scene_frames)
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # joints2d = self.get_joints2d(input_video_path)
-        joints2d = np.zeros((39, 45, 2))
+        joints2d = self.get_joints2d(input_video_path)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # remove_tmp_dir(input_video_path)
+        remove_tmp_dir(input_video_path)
 
-        # joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
-        joints2d = np.zeros((39, 768, 768, 3))
+        joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
-        scene_frames = np.zeros((39, 768, 768, 3))
+        scene_frames = np.array(self.inpaint_scene_layer(scene_frames))
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # apose_ref = self.get_apose_ref(resized_frames)
-        apose_ref = np.zeros((768, 768, 3))
+        apose_ref = self.get_apose_ref(resized_frames)
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # clip_embeddings = self.clip_apose(apose_ref)
-        clip_embeddings = np.zeros((1, 768))
+        clip_embeddings = self.clip_apose(apose_ref)
         print("np.shape(clip_embeddings)", np.shape(clip_embeddings), type(clip_embeddings))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        # scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
-        # del resized_frames
-        scene_frames = np.zeros((39, 4, 96, 96))
-        occlusion_frames = np.zeros((39, 4, 96, 96))
-        apose_ref = np.zeros((1, 4, 96, 96))
+        scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
+        del resized_frames
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
