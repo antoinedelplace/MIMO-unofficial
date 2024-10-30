@@ -32,6 +32,7 @@ def main(
         batch_size_reposer=24,
         batch_size_clip=16,
         batch_size_vae=12,
+        batch_size_rasterizer=256,
     ):
     set_memory_limit(cpu_memory_limit_gb)
 
@@ -54,6 +55,7 @@ def main(
         batch_size_reposer=batch_size_reposer,
         batch_size_clip=batch_size_clip,
         batch_size_vae=batch_size_vae,
+        batch_size_rasterizer=batch_size_rasterizer
     )
 
     pipe(input_video_path, avatar_image_path, motion_video_path, output_video_path)

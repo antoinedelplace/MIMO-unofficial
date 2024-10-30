@@ -57,7 +57,7 @@ from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_outp
 from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
 from mimo.dataset_preprocessing.get_apose_ref import get_apose_ref_img
 from mimo.dataset_preprocessing.pose_estimation_4DH import get_cfg, get_data_from_4DH
-from mimo.dataset_preprocessing.rasterizer_2d_joints import get_rasterized_joints_2d
+from mimo.dataset_preprocessing.rasterizer_2d_joints import RasterizerBatchPredictor
 
 
 class InferencePipeline():
@@ -81,6 +81,7 @@ class InferencePipeline():
             batch_size_reposer,
             batch_size_clip,
             batch_size_vae,
+            batch_size_rasterizer
         ):
         self.num_scheduler_steps = num_scheduler_steps
         self.guidance_scale = guidance_scale
@@ -98,6 +99,7 @@ class InferencePipeline():
         self.batch_size_reposer = batch_size_reposer
         self.batch_size_clip = batch_size_clip
         self.batch_size_vae = batch_size_vae
+        self.batch_size_rasterizer = batch_size_rasterizer
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
@@ -318,6 +320,11 @@ class InferencePipeline():
         data_4DH = get_data_from_4DH(input_video_path, phalp_tracker)
 
         return data_4DH["data_joints_2d"]
+
+    def get_rasterized_joints_2d(self, data_joints_2d):
+        rasterizer = RasterizerBatchPredictor(self.batch_size_rasterizer, self.num_workers, self.input_net_size, self.input_net_size)
+
+        return np.concatenate(list(rasterizer(data_joints_2d)))
 
     def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, encoder_hidden_states):
         t = torch.zeros((1), dtype=latent_apose.dtype, device=latent_apose.device)
@@ -590,7 +597,7 @@ class InferencePipeline():
 
         remove_tmp_dir(temp_input_video_path)
 
-        joints2d = get_rasterized_joints_2d(joints2d, self.input_net_size, self.input_net_size)
+        joints2d = self.get_rasterized_joints_2d(joints2d)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()

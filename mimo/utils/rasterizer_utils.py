@@ -1,6 +1,17 @@
+import sys
+sys.path.append(".")
+
+from mimo.configs.paths import NVDIFFRAST_REPO
+sys.path.append(NVDIFFRAST_REPO)
+
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 import scipy.spatial
+
+import nvdiffrast.torch as dr
+
+from mimo.utils.torch_utils import NpzDataset
 
 def get_triangles_from_2d_joints(data_joints_2d):
     mean_points_2d = np.mean(data_joints_2d[:, :, :2], axis=0)
@@ -144,3 +155,55 @@ vertex_attrs = torch.tensor([[1.0000, 1.0000, 1.0000],
         [0.3333, 0.3333, 0.3333],
         [0.0000, 0.3333, 0.3333],
         [1.0000, 0.0000, 0.3333]], device="cuda", dtype=torch.float32)
+
+class RasterizerBatchPredictor():
+    def __init__(
+        self, 
+        batch_size: int, 
+        workers: int,
+        height, 
+        width
+    ):
+        self.rast_ctx = dr.RasterizeCudaContext()
+        self.batch_size = batch_size
+        self.workers = workers
+
+        self.height = height
+        self.width = width
+
+    def __call__(self, data_joints_2d):
+        dataset = NpzDataset(data_joints_2d)
+        loader = DataLoader(
+            dataset,
+            self.batch_size,
+            shuffle=False,
+            num_workers=self.workers,
+            pin_memory=True
+        )
+        with torch.no_grad():
+            for batch in loader:
+                n_batch, n_joints, _ = batch.shape
+
+                batch = batch.to(torch.float32).cuda()
+
+                # Normalize the 2D joint coordinates to the range [-1, 1]
+                batch = batch * 2 - 1
+
+                # Add a dummy z coordinate to make the vertices 3D (for rasterization)
+                vertices = torch.cat([batch, torch.zeros(n_batch, n_joints, 1).cuda()], dim=-1)  # Shape: [n_batch, n_joints, 3]
+                vertices = torch.cat([vertices, torch.ones(n_batch, n_joints, 1).cuda()], dim=-1)  # Shape: [n_batch, n_joints, 4]
+
+                # Rasterization step: get pixel coverage and barycentric coordinates
+                rast_out, _ = dr.rasterize(self.rast_ctx, vertices, triangles, resolution=[self.height, self.width])
+
+                batch_vertex_attrs = vertex_attrs.unsqueeze(0).expand(n_batch, -1, -1).contiguous()  # Shape: [n_batch, n_joints, 3]
+
+                # Interpolate vertex features over the rasterized output
+                interpolated_features, _ = dr.interpolate(batch_vertex_attrs, rast_out, triangles)
+
+                # Apply masking to retain only valid pixels
+                mask = rast_out[..., 3:] > 0  # Valid pixels have alpha > 0
+                interpolated_features = interpolated_features * mask
+
+                # Resulting interpolated 2D feature map (n_batch, height, width)
+                yield (interpolated_features.squeeze().cpu().numpy() * 255).clip(min=0, max=255).astype(np.uint8)
