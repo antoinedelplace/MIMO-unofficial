@@ -4,7 +4,7 @@ sys.path.append(".")
 import os, cv2, tqdm
 import numpy as np
 
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 
 from mimo.configs.paths import APOSE_REF_FOLDER, APOSE_CLIP_EMBEDS_FOLDER
@@ -13,6 +13,7 @@ from mimo.configs.paths import APOSE_REF_FOLDER, APOSE_CLIP_EMBEDS_FOLDER
 def run_on_image(input_path, clip, output_folder):
     basename = os.path.basename(input_path)
 
+    assert_file_exist(input_path)
     image = cv2.imread(input_path)
 
     image_embeds = list(clip([image]))[0]

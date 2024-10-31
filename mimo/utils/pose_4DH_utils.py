@@ -12,6 +12,7 @@ import numpy as np
 from typing import Optional, Tuple
 
 from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.general_utils import assert_file_exist
 
 from phalp.models.hmar.hmr import HMR2018Predictor
 from phalp.trackers.PHALP import PHALP
@@ -53,8 +54,8 @@ class HMR2023TextureSampler(HMR2Predictor):
 
         # Model's all set up. Now, load tex_bmap and tex_fmap
         # Texture map atlas
-        bmap = np.load(os.path.join(CACHE_DIR, 'phalp/3D/bmap_256.npy'))
-        fmap = np.load(os.path.join(CACHE_DIR, 'phalp/3D/fmap_256.npy'))
+        bmap = np.load(assert_file_exist(CACHE_DIR, 'phalp/3D/bmap_256.npy'))
+        fmap = np.load(assert_file_exist(CACHE_DIR, 'phalp/3D/fmap_256.npy'))
         self.register_buffer('tex_bmap', torch.tensor(bmap, dtype=torch.float))
         self.register_buffer('tex_fmap', torch.tensor(fmap, dtype=torch.long))
 

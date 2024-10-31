@@ -26,7 +26,7 @@ from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
 from src.dwpose import DWposeDetector
 from src.dwpose.wholebody import Wholebody
 
-from mimo.utils.general_utils import argmedian
+from mimo.utils.general_utils import argmedian, assert_file_exist
 from mimo.utils.video_utils import frame_from_video
 from mimo.utils.torch_utils import VideoDataset
 
@@ -121,8 +121,8 @@ class CustomWholebody(Wholebody):
         providers = [("CUDAExecutionProvider", {"device_id": torch.cuda.current_device(),
                                         "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)})]
         
-        onnx_det = os.path.join(CHECKPOINTS_FOLDER, "DWPose/yolox_l.onnx")
-        onnx_pose = os.path.join(CHECKPOINTS_FOLDER, "DWPose/dw-ll_ucoco_384.onnx")
+        onnx_det = assert_file_exist(CHECKPOINTS_FOLDER, "DWPose/yolox_l.onnx")
+        onnx_pose = assert_file_exist(CHECKPOINTS_FOLDER, "DWPose/dw-ll_ucoco_384.onnx")
 
         self.session_det = ort.InferenceSession(
             path_or_bytes=onnx_det, providers=providers
@@ -149,7 +149,7 @@ class ReposerBatchPredictor():
             dtype=torch.float16, device="cuda"
         )
         pose_guider.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
         
         reference_unet = UNet2DConditionModel.from_pretrained(
@@ -158,16 +158,16 @@ class ReposerBatchPredictor():
             use_safetensors=True
         ).to("cuda")
         reference_unet.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
 
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
-            os.path.join(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
+            assert_file_exist(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
             unet_additional_kwargs=infer_config.unet_additional_kwargs,
         ).to(torch.float16).to("cuda")
         denoising_unet.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
 

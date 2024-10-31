@@ -3,7 +3,7 @@ sys.path.append(".")
 
 import os, cv2, tqdm
 
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.propainter_utils import ProPainterBatchPredictor
 from mimo.utils.video_utils import frame_gen_from_video
 
@@ -26,6 +26,7 @@ def inpaint_frames(frame_gen, predictor, output_file=None):
     return output_frames
 
 def run_on_video(input_path, predictor, output_folder):
+    assert_file_exist(input_path)
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)

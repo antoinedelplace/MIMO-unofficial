@@ -16,7 +16,7 @@ from detectron2.structures import Instances, Boxes
 from sam2.build_sam import build_sam2_video_predictor
 
 from mimo.utils.video_utils import frame_gen_from_video
-from mimo.utils.general_utils import iou, set_memory_limit, try_wrapper, parse_args
+from mimo.utils.general_utils import iou, set_memory_limit, try_wrapper, parse_args, assert_file_exist
 
 
 def get_index_first_frame_with_character(detectron2_data, score_threshold):
@@ -124,7 +124,8 @@ def visualize(sam_output, video, input_path, human_output_folder):
 
     output_file.release()
 
-    video2 = cv2.VideoCapture(os.path.join(human_output_folder, basename))
+    video_path = assert_file_exist(human_output_folder, basename)
+    video2 = cv2.VideoCapture(video_path)
 
     width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -314,12 +315,15 @@ def run_on_video(input_path,
                  human_output_folder, 
                  scene_output_folder, 
                  occlusion_output_folder):
+    assert_file_exist(input_path)
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
 
-    detectron2_data = dict(np.load(os.path.join(detectron2_input_folder, basename).replace(".mp4", ".npz")))
-    depth_video = cv2.VideoCapture(os.path.join(depth_input_folder, basename))
+    detectron2_path = assert_file_exist(detectron2_input_folder, basename.replace(".mp4", ".npz"))
+    detectron2_data = dict(np.load(detectron2_path))
+    depth_path = assert_file_exist(depth_input_folder, basename)
+    depth_video = cv2.VideoCapture(depth_path)
 
     detectron2_data["data_frame_index"] = detectron2_data["data_frame_index"].astype(np.int32)
     depth = np.array(list(frame_gen_from_video(depth_video)))
@@ -355,8 +359,8 @@ def main(
     log_path = os.path.join(human_output_folder, "error_log.txt")
 
     set_memory_limit(cpu_memory_limit_gb)
-    checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
-    model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+    checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
+    model_cfg = assert_file_exist(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
     predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]

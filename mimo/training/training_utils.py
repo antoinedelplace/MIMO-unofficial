@@ -73,7 +73,9 @@ def get_last_checkpoint(folder):
     dirs = os.listdir(folder)
     dirs = [d for d in dirs if d.startswith("checkpoint")]
     dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
-    
+
+    if len(dirs) == 0:
+        raise Exception(f"No checkpoint-xxx folder found in {folder}")
     path = dirs[-1]
     global_step = int(path.split("-")[1])
 

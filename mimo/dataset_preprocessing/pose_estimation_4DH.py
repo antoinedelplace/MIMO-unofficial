@@ -5,7 +5,7 @@ import os, cv2, torch, tqdm
 import numpy as np
 
 from mimo.utils.video_utils import frame_gen_from_video
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.pose_4DH_utils import HMR2_4dhuman, Human4DConfig
 from mimo.utils.skeleton_utils import Skeleton, SMPL_bones, SMPL_hierarchy, Openpose_25_hierarchy, points_animation_linked_3d, get_chains_from_bones_hierarchy
 from mimo.utils.rotation_conversions_utils import matrix_to_axis_angle
@@ -167,8 +167,9 @@ def get_data_from_4DH(input_path, phalp_tracker):
             "data_joints_2d": data_joints_2d}
     
 def run_on_video(input_path, phalp_tracker, output_folder):
+    assert_file_exist(input_path)
     basename = os.path.basename(input_path)
-    output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
+    output_path = os.path.join(output_folder, basename.replace(".mp4", ".npz"))
 
     data_4DH = get_data_from_4DH(input_path, phalp_tracker)
 

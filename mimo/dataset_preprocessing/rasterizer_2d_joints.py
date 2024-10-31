@@ -4,7 +4,7 @@ sys.path.append(".")
 import os, cv2, tqdm
 import numpy as np
 
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.rasterizer_utils import RasterizerBatchPredictor
 
 from mimo.configs.paths import POSES_4DH_FOLDER, RASTERIZED_2D_JOINTS_FOLDER
@@ -28,6 +28,7 @@ def save(feature_map, basename, fps, output_folder):
     
     
 def run_on_video(input_path, fps, rasterizer, output_folder):
+    assert_file_exist(input_path)
     basename = os.path.basename(input_path)
 
     outputs = dict(np.load(input_path))

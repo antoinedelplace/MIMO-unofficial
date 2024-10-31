@@ -5,7 +5,7 @@ import os, cv2, tqdm
 import numpy as np
 
 from mimo.utils.video_utils import frame_gen_from_video
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.apose_ref_utils import download_base_model, download_anyone, download_dwpose, get_frame_closest_pose, ReposerBatchPredictor, get_kps_image, CustomDWposeDetector
 from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
@@ -23,6 +23,7 @@ def get_apose_ref_img(frame_gen, reposer, a_pose_kps, ref_points_2d, dw_pose_det
     return output_image[0]
 
 def run_on_video(input_path, reposer, dw_pose_detector, a_pose_kps, ref_points_2d, output_folder):
+    assert_file_exist(input_path)
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -60,6 +61,7 @@ def main(
     clip = CLIPBatchPredictor(batch_size, workers)
     reposer = ReposerBatchPredictor(batch_size, workers, clip, vae)
 
+    assert_file_exist(a_pose_raw_path)
     a_pose_kps, ref_points_2d = get_kps_image(a_pose_raw_path, dw_pose_detector)
     # print("np.shape(a_pose_kps)", np.shape(a_pose_kps))
     # print("np.shape(ref_points_2d['bodies']['candidate'])", np.shape(ref_points_2d['bodies']['candidate']))

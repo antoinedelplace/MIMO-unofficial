@@ -3,12 +3,13 @@ sys.path.append(".")
 
 import os, tqdm
 from mimo.utils.video_utils import hash_file
-from mimo.utils.general_utils import try_wrapper, parse_args
+from mimo.utils.general_utils import try_wrapper, parse_args, assert_file_exist
 
 from mimo.configs.paths import RESIZED_FOLDER
 
 
 def process_video(input_path, hashset):
+    assert_file_exist(input_path)
     hash = hash_file(input_path)
     if hash in hashset:
         print(f"File deleted: {input_path}")

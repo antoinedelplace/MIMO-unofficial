@@ -6,7 +6,7 @@ import numpy as np
 
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 
 from mimo.configs.paths import RESIZED_FOLDER, DEPTH_FOLDER, CHECKPOINTS_FOLDER
 
@@ -35,6 +35,7 @@ def get_depth(frame_gen, depth_anything, output_file=None):
     return output_frames
 
 def run_on_video(input_path, depth_anything, output_folder):
+    assert_file_exist(input_path)
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -76,7 +77,8 @@ def main(
     set_memory_limit(cpu_memory_limit_gb)
 
     depth_anything = DepthBatchPredictor(batch_size, workers, torch.bfloat16, input_size, input_size, **DEPTH_ANYTHING_MODEL_CONFIGS[encoder])
-    depth_anything.load_state_dict(torch.load(os.path.join(CHECKPOINTS_FOLDER, f'depth_anything_v2_{encoder}.pth'), map_location='cpu', weights_only=True))
+    checkpoint_path = assert_file_exist(CHECKPOINTS_FOLDER, f'depth_anything_v2_{encoder}.pth')
+    depth_anything.load_state_dict(torch.load(checkpoint_path, map_location='cpu', weights_only=True))
     depth_anything = depth_anything.to(torch.bfloat16).to(device).eval()
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]

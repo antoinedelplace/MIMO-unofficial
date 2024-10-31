@@ -37,6 +37,7 @@ from src.models.resnet import InflatedConv3d
 
 from mimo.utils.apose_ref_utils import download_base_model, download_anyone
 from mimo.utils.torch_utils import seed_everything
+from mimo.utils.general_utils import assert_file_exist
 
 from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint, get_last_checkpoint
 from mimo.training.training_dataset import TrainingDataset, collate_fn
@@ -79,16 +80,16 @@ class TrainingPipeline:
             use_safetensors=True
         )
         reference_unet.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
         
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
-            os.path.join(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
+            assert_file_exist(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
             unet_additional_kwargs=self.infer_cfg.unet_additional_kwargs,
         )
         denoising_unet.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
 
@@ -103,7 +104,7 @@ class TrainingPipeline:
 
         pose_guider = PoseGuider(conditioning_embedding_channels=320)
         pose_guider.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
 
         ## Freeze

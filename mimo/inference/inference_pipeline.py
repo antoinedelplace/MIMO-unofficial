@@ -40,7 +40,7 @@ from mimo.training.models import Net
 from mimo.inference.inference_utils import create_video_from_frames, remove_tmp_dir, get_extra_kwargs_scheduler
 from mimo.inference.inference_dataset import InferenceDataset, collate_fn, collate_fn_rast
 
-from mimo.utils.general_utils import get_gpu_memory_usage
+from mimo.utils.general_utils import get_gpu_memory_usage, assert_file_exist
 from mimo.utils.torch_utils import free_gpu_memory, seed_everything, NpzDataset
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.depth_anything_v2_utils import DepthBatchPredictor
@@ -59,6 +59,7 @@ from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
 from mimo.dataset_preprocessing.get_apose_ref import get_apose_ref_img
 from mimo.dataset_preprocessing.pose_estimation_4DH import get_cfg, get_data_from_4DH
 from mimo.dataset_preprocessing.rasterizer_2d_joints import RasterizerBatchPredictor
+from mimo.dataset_preprocessing.vae_encoding import remove_mirror_occlusion_for_vertical_videos
 
 
 class InferencePipeline():
@@ -145,16 +146,16 @@ class InferencePipeline():
             use_safetensors=True
         )
         reference_unet.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
         
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
-            os.path.join(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
+            assert_file_exist(ANIMATE_ANYONE_FOLDER, "motion_module.pth"),
             unet_additional_kwargs=self.infer_cfg.unet_additional_kwargs,
         )
         denoising_unet.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
 
@@ -169,7 +170,7 @@ class InferencePipeline():
 
         pose_guider = PoseGuider(conditioning_embedding_channels=320)
         pose_guider.load_state_dict(
-            torch.load(os.path.join(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
+            torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
         
         reference_control_writer = ReferenceAttentionControl(
@@ -207,6 +208,7 @@ class InferencePipeline():
             else:
                 path, global_step = get_last_checkpoint(self.infer_cfg.load_from_checkpoint)
                 checkpoint_path = os.path.join(self.infer_cfg.load_from_checkpoint, path, "model.safetensors")
+            assert_file_exist(checkpoint_path)
             checkpoint = load_file(checkpoint_path)
             model.load_state_dict(checkpoint)
         
@@ -233,7 +235,7 @@ class InferencePipeline():
                                              self.input_net_size, 
                                              self.input_net_size, 
                                              **DEPTH_ANYTHING_MODEL_CONFIGS[self.depth_anything_encoder])
-        depth_anything.load_state_dict(torch.load(os.path.join(CHECKPOINTS_FOLDER, f'depth_anything_v2_{self.depth_anything_encoder}.pth'), map_location='cpu', weights_only=True))
+        depth_anything.load_state_dict(torch.load(assert_file_exist(CHECKPOINTS_FOLDER, f'depth_anything_v2_{self.depth_anything_encoder}.pth'), map_location='cpu', weights_only=True))
 
         depth_anything = self.accelerator.prepare(depth_anything)
 
@@ -248,8 +250,8 @@ class InferencePipeline():
         return post_processing_detectron2(list(predictor(resized_frames)))
     
     def get_layers_sam2(self, input_video_path, resized_frames, detectron2_output, depth_frames):
-        checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
-        model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+        checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
+        model_cfg = assert_file_exist(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
         predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
         predictor = self.accelerator.prepare(predictor)
@@ -286,6 +288,7 @@ class InferencePipeline():
 
         reposer.pipe, dw_pose_detector = self.accelerator.prepare(reposer.pipe, dw_pose_detector)
 
+        assert_file_exist(self.a_pose_raw_path)
         a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path, dw_pose_detector)
 
         return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d, dw_pose_detector)
@@ -299,7 +302,7 @@ class InferencePipeline():
 
         return list(clip([apose_ref]))[0]
     
-    def vae_encoding(self, scene_frames, occlusion_frames, resized_frames, apose_ref):
+    def vae_encoding(self, scene_frames, occlusion_frames, resized_frames, apose_ref, ori_width, ori_height):
         download_vae()
 
         vae = VaeBatchPredictor(self.batch_size_vae, self.num_workers)
@@ -307,7 +310,8 @@ class InferencePipeline():
         vae.vae = self.accelerator.prepare(vae.vae)
 
         scene_frames = np.concatenate(list(vae.encode(scene_frames)))
-        occlusion_frames = np.concatenate(list(vae.encode(occlusion_frames)))
+        occlusion_frames_filtered = remove_mirror_occlusion_for_vertical_videos(occlusion_frames, ori_width, ori_height, self.input_net_size)
+        occlusion_frames = np.concatenate(list(vae.encode(occlusion_frames_filtered)))
         resized_frames = np.concatenate(list(vae.encode(resized_frames)))
         apose_ref = np.concatenate(list(vae.encode([apose_ref])))
 
@@ -535,8 +539,8 @@ class InferencePipeline():
         video2.release()
 
     def get_avatar_sam2_mask(self, avatar_image, data_pred_boxes):
-        checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
-        model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+        checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
+        model_cfg = assert_file_exist(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
 
         sam2_model = build_sam2(model_cfg, checkpoint)
         predictor = SAM2ImagePredictor(sam2_model)
@@ -580,6 +584,7 @@ class InferencePipeline():
     def __call__(self, input_video_path, input_avatar_image_path, input_motion_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
 
+        assert_file_exist(input_video_path)
         video = cv2.VideoCapture(input_video_path)
 
         basename = os.path.basename(input_video_path)
@@ -631,6 +636,7 @@ class InferencePipeline():
         get_gpu_memory_usage()
 
         if input_motion_video_path is not None:
+            assert_file_exist(input_motion_video_path)
             video_motion = cv2.VideoCapture(input_motion_video_path)
             frames_per_second_motion = video_motion.get(cv2.CAP_PROP_FPS)
             frame_gen_motion = np.array(list(frame_gen_from_video(video_motion)))
@@ -665,6 +671,7 @@ class InferencePipeline():
         get_gpu_memory_usage()
 
         if input_avatar_image_path is not None:
+            assert_file_exist(input_avatar_image_path)
             avatar_image = self.get_avatar_image(input_avatar_image_path)
             print("np.shape(avatar_image)", np.shape(avatar_image), type(avatar_image))
             # cv2.imwrite("../../data/iron_man_square.png", avatar_image)
@@ -681,7 +688,7 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref)
+        scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref, width, height)
         del resized_frames
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))

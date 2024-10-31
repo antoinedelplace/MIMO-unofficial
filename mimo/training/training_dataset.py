@@ -7,7 +7,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 from mimo.utils.video_utils import frame_gen_from_video
-from mimo.utils.general_utils import try_wrapper
+from mimo.utils.general_utils import try_wrapper, assert_file_exist
 
 from mimo.dataset_preprocessing.video_tracking_sam2 import get_index_first_frame_with_character
 
@@ -45,7 +45,7 @@ def collate_fn(batch, weight_dtype):
     )
 
 def get_i_first_frame(filename, detectron_score_threshold):
-    data = np.load(os.path.join(ENCODED_OCCLUSION_SCENE_FOLDER, f"{filename}.npz"))
+    data = np.load(assert_file_exist(ENCODED_OCCLUSION_SCENE_FOLDER, f"{filename}.npz"))
 
     n_frames_scene = len(data["latent_scene"])
     n_frames_occlusion = len(data["latent_occlusion"])
@@ -56,7 +56,7 @@ def get_i_first_frame(filename, detectron_score_threshold):
 
     i_first_frame = 0
     if n_frames_scene != n_frames_video:
-        detectron2_data = dict(np.load(os.path.join(DETECTRON2_FOLDER, f"{filename}.npz")))
+        detectron2_data = dict(np.load(assert_file_exist(DETECTRON2_FOLDER, f"{filename}.npz")))
         # Here might have a problem: SAM2 first frame may not be frame with first character
         i_first_frame = get_index_first_frame_with_character(detectron2_data, detectron_score_threshold)
     
@@ -113,14 +113,14 @@ class TrainingDataset(Dataset):
         begin_frame_scene = self.begin_frame_scene[index]
         begin_frame_video = self.begin_frame_video[index]
 
-        rast_2d_joints_video = cv2.VideoCapture(os.path.join(RASTERIZED_2D_JOINTS_FOLDER, f"{filename}.mp4"))
+        rast_2d_joints_video = cv2.VideoCapture(assert_file_exist(RASTERIZED_2D_JOINTS_FOLDER, f"{filename}.mp4"))
         rast_2d_joints = np.array(list(frame_gen_from_video(rast_2d_joints_video)))
         rast_2d_joints_video.release()
         rast_2d_joints = rast_2d_joints[begin_frame_scene:begin_frame_scene+self.window_length]
 
-        a_pose_clip = dict(np.load(os.path.join(APOSE_CLIP_EMBEDS_FOLDER, f"{filename}.npz")))
+        a_pose_clip = dict(np.load(assert_file_exist(APOSE_CLIP_EMBEDS_FOLDER, f"{filename}.npz")))
 
-        encoded_frames = dict(np.load(os.path.join(ENCODED_OCCLUSION_SCENE_FOLDER, f"{filename}.npz")))
+        encoded_frames = dict(np.load(assert_file_exist(ENCODED_OCCLUSION_SCENE_FOLDER, f"{filename}.npz")))
         encoded_frames["latent_scene"] = encoded_frames["latent_scene"][begin_frame_scene:begin_frame_scene+self.window_length]
         encoded_frames["latent_occlusion"] = encoded_frames["latent_occlusion"][begin_frame_scene:begin_frame_scene+self.window_length]
         encoded_frames["latent_video"] = encoded_frames["latent_video"][begin_frame_video:begin_frame_video+self.window_length]

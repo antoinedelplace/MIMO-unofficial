@@ -1,7 +1,7 @@
 import sys
 sys.path.append(".")
 
-import time
+import time, os
 from functools import wraps
 import numpy as np
 import torch
@@ -129,3 +129,10 @@ def get_gpu_memory_usage():
         print(f"GPU {gpu.id} ({gpu.name}): {memory_used_gb} GB / {memory_total_gb} GB")
     
     return gpu_memory_info
+
+def assert_file_exist(*args):
+    path = os.path.join(*args)
+    if not os.path.exists(path):
+        raise Exception(f"File {path} does not exist")
+    
+    return path

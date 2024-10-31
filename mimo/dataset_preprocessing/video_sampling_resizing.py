@@ -5,7 +5,7 @@ import os, cv2, tqdm
 import numpy as np
 
 from mimo.utils.video_utils import frame_gen_from_video
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 
 from mimo.configs.paths import RAW_FOLDER, RESIZED_FOLDER
 
@@ -50,6 +50,7 @@ def sampling_resizing(frame_gen, input_fps, output_fps, output_width, output_fil
     return output_frames
 
 def process_video(input_path, output_size, output_fps, input_fps, output_folder):
+    assert_file_exist(input_path)
     video = cv2.VideoCapture(input_path)
 
     basename = os.path.basename(input_path)
@@ -81,7 +82,8 @@ def process_video(input_path, output_size, output_fps, input_fps, output_folder)
     video.release()
     output_file.release()
 
-    # video2 = cv2.VideoCapture(os.path.join(output_folder, basename))
+    # video_path = assert_file_exist(output_folder, basename)
+    # video2 = cv2.VideoCapture(video_path)
 
     # width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
     # height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))

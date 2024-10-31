@@ -15,7 +15,7 @@ import numpy as np
 
 from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.detectron2_utils import DetectronBatchPredictor
-from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args
+from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 
 
 def get_cfg_settings():
@@ -64,7 +64,8 @@ def visualize(predictions, video, input_path, output_folder):
 
     output_file.release()
 
-    video2 = cv2.VideoCapture(os.path.join(output_folder, basename))
+    video_path = assert_file_exist(output_folder, basename)
+    video2 = cv2.VideoCapture(video_path)
 
     width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -113,6 +114,7 @@ def post_processing_detectron2(outputs, output_path=None):
             "data_pred_masks":data_pred_masks}
 
 def run_on_video(input_path, predictor, output_folder):
+    assert_file_exist(input_path)
     video = cv2.VideoCapture(input_path)
     
     frame_gen = frame_gen_from_video(video)
@@ -120,7 +122,7 @@ def run_on_video(input_path, predictor, output_folder):
     outputs = list(predictor(frame_gen))
 
     basename = os.path.basename(input_path)
-    output_path = os.path.join(output_folder, basename).replace(".mp4", ".npz")
+    output_path = os.path.join(output_folder, basename.replace(".mp4", ".npz"))
 
     # visualize(outputs, video, input_path, output_folder)
     post_processing_detectron2(outputs, output_path)
