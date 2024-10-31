@@ -54,56 +54,107 @@ def remove_mirror_occlusion_for_vertical_videos(frame_gen, ori_width, ori_height
             frame[:, -int(scale*(ori_height-ori_width+1)//2):, :] = 0
             yield frame
     else:
-        yield from frame_gen
+        for frame in frame_gen:
+            yield frame
 
+def inpaint_mirror_for_vertical_videos(frame_gen, ori_width, ori_height, input_net_size, input_path):
+    if ori_width < ori_height:
+        scale = input_net_size/ori_height
 
-def run_on_video(input_path, occlusion_input_folder, resized_folder, apose_ref_folder, raw_input_folder, vae, output_folder):
-    basename = os.path.basename(input_path)
+        assert_file_exist(input_path)
+        video_scene = cv2.VideoCapture(input_path)
+        frame_gen_scene2 = frame_gen_from_video(video_scene)
 
+        for frame, frame_scene in zip(frame_gen, frame_gen_scene2):
+            left_pad = int(scale*(ori_height-ori_width)//2)
+            right_pad = int(scale*(ori_height-ori_width+1)//2)
+            frame[:, :left_pad, :] = frame_scene[:, :left_pad, :]
+            frame[:, -right_pad:, :] = frame_scene[:, -right_pad:, :]
+            yield frame
+    else:
+        for frame in frame_gen:
+            yield frame
+
+def get_latent_scene(input_path, vae, output_folder=None):
     assert_file_exist(input_path)
     video_scene = cv2.VideoCapture(input_path)
     frame_gen_scene = frame_gen_from_video(video_scene)
 
     latent_scene = np.concatenate(list(vae.encode(frame_gen_scene)))
     print("np.shape(latent_scene)", np.shape(latent_scene))
-    # visualize(latent_scene, video_scene, input_path)
+    if output_folder is not None:
+        visualize(vae, latent_scene, video_scene, input_path, output_folder)
 
     video_scene.release()
 
+    return latent_scene
+
+def get_latent_occlusion(basename, occlusion_input_folder, ori_width, ori_height, vae, output_folder=None):
     video_path = assert_file_exist(occlusion_input_folder, basename)
     video_occlusion = cv2.VideoCapture(video_path)
     frame_gen_occlusion = frame_gen_from_video(video_occlusion)
 
-    # frame_gen_occlusion = np.array(list(frame_gen_occlusion))
-    # print("np.shape(frame_gen_occlusion)", np.shape(frame_gen_occlusion))
+    frame_gen_occlusion = np.array(list(frame_gen_occlusion))
+    print("np.shape(frame_gen_occlusion)", np.shape(frame_gen_occlusion))
 
     input_net_size = int(video_occlusion.get(cv2.CAP_PROP_FRAME_WIDTH))
-    ori_width, ori_height = get_original_width_height(basename, raw_input_folder)
-    frame_gen_filtered = remove_mirror_occlusion_for_vertical_videos(frame_gen_occlusion, ori_width, ori_height, input_net_size)
+    frame_gen_occlusion_filtered = remove_mirror_occlusion_for_vertical_videos(frame_gen_occlusion, ori_width, ori_height, input_net_size)
 
-    # frame_gen_filtered = np.array(list(frame_gen_filtered))
-    # print("np.shape(frame_gen_filtered)", np.shape(frame_gen_filtered))
+    frame_gen_occlusion_filtered = np.array(list(frame_gen_occlusion_filtered))
+    print("np.shape(frame_gen_occlusion_filtered)", np.shape(frame_gen_occlusion_filtered))
 
-    latent_occlusion = np.concatenate(list(vae.encode(frame_gen_filtered)))
+    latent_occlusion = np.concatenate(list(vae.encode(frame_gen_occlusion_filtered)))
     print("np.shape(latent_occlusion)", np.shape(latent_occlusion))
-    # visualize(vae, latent_occlusion, video_occlusion, input_path, output_folder)
+    if output_folder is not None:
+        visualize(vae, latent_occlusion, video_occlusion, video_path, output_folder)
     
     video_occlusion.release()
 
+    return latent_occlusion
+
+def get_latent_video(input_path, basename, resized_folder, ori_width, ori_height, vae, output_folder=None):
     video_path = assert_file_exist(resized_folder, basename)
     video_ori = cv2.VideoCapture(video_path)
     frame_gen_video = frame_gen_from_video(video_ori)
 
-    latent_video = np.concatenate(list(vae.encode(frame_gen_video)))
+    frame_gen_video = np.array(list(frame_gen_video))
+    print("np.shape(frame_gen_video)", np.shape(frame_gen_video))
+
+    input_net_size = int(video_ori.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_gen_video_filtered = inpaint_mirror_for_vertical_videos(frame_gen_video, ori_width, ori_height, input_net_size, input_path)
+
+    frame_gen_video_filtered = np.array(list(frame_gen_video_filtered))
+    print("np.shape(frame_gen_video_filtered)", np.shape(frame_gen_video_filtered))
+
+    latent_video = np.concatenate(list(vae.encode(frame_gen_video_filtered)))
     print("np.shape(latent_video)", np.shape(latent_video))
-    # visualize(vae, latent_video, video_ori, input_path, output_folder)
+    if output_folder is not None:
+        visualize(vae, latent_video, video_ori, input_path, output_folder)
     
     video_ori.release()
 
+    return latent_video
+
+def get_latent_apose(basename, apose_ref_folder, vae):
     image_path = assert_file_exist(apose_ref_folder, basename.replace(".mp4", ".png"))
     a_pose = cv2.imread(image_path)
     latent_apose = np.concatenate(list(vae.encode([a_pose])))
     print("np.shape(latent_apose)", np.shape(latent_apose))
+
+    return latent_apose
+
+def run_on_video(input_path, occlusion_input_folder, resized_folder, apose_ref_folder, raw_input_folder, vae, output_folder):
+    basename = os.path.basename(input_path)
+
+    ori_width, ori_height = get_original_width_height(basename, raw_input_folder)
+
+    latent_scene = get_latent_scene(input_path, vae)
+
+    latent_occlusion = get_latent_occlusion(basename, occlusion_input_folder, ori_width, ori_height, vae)
+
+    latent_video = get_latent_video(input_path, basename, resized_folder, ori_width, ori_height, vae)
+
+    latent_apose = get_latent_apose(basename, apose_ref_folder, vae)
     
     output_path = os.path.join(output_folder, basename.replace(".mp4", ".npz"))
     np.savez_compressed(output_path, 

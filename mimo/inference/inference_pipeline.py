@@ -302,7 +302,7 @@ class InferencePipeline():
 
         return list(clip([apose_ref]))[0]
     
-    def vae_encoding(self, scene_frames, occlusion_frames, resized_frames, apose_ref, ori_width, ori_height):
+    def vae_encoding(self, scene_frames, occlusion_frames, apose_ref, ori_width, ori_height):
         download_vae()
 
         vae = VaeBatchPredictor(self.batch_size_vae, self.num_workers)
@@ -312,10 +312,9 @@ class InferencePipeline():
         scene_frames = np.concatenate(list(vae.encode(scene_frames)))
         occlusion_frames_filtered = remove_mirror_occlusion_for_vertical_videos(occlusion_frames, ori_width, ori_height, self.input_net_size)
         occlusion_frames = np.concatenate(list(vae.encode(occlusion_frames_filtered)))
-        resized_frames = np.concatenate(list(vae.encode(resized_frames)))
         apose_ref = np.concatenate(list(vae.encode([apose_ref])))
 
-        return scene_frames, occlusion_frames, resized_frames, apose_ref
+        return scene_frames, occlusion_frames, apose_ref
 
     def get_joints2d(self, input_video_path):
         phalp_tracker = HMR2_4dhuman(get_cfg())
@@ -679,6 +678,7 @@ class InferencePipeline():
             # cv2.imwrite("../../data/iron_man_square_a_pose.png", apose_ref)
         else:
             apose_ref = self.get_apose_ref(resized_frames)
+        del resized_frames
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
@@ -688,8 +688,7 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        scene_frames, occlusion_frames, resized_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, resized_frames, apose_ref, width, height)
-        del resized_frames
+        scene_frames, occlusion_frames, apose_ref = self.vae_encoding(scene_frames, occlusion_frames, apose_ref, width, height)
         print("np.shape(scene_frames)", np.shape(scene_frames), type(scene_frames))
         print("np.shape(occlusion_frames)", np.shape(occlusion_frames), type(occlusion_frames))
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
@@ -703,19 +702,19 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        resized_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))  # (f, c, h, w)
+        output_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))  # (f, c, h, w)
         del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
-        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
+        print("np.shape(output_frames)", np.shape(output_frames), type(output_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        resized_frames = self.get_images_from_latents(resized_frames)
-        print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
+        output_frames = self.get_images_from_latents(output_frames)
+        print("np.shape(output_frames)", np.shape(output_frames), type(output_frames))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
         if output_video_path is None:
             output_video_path = input_video_path.replace(".mp4", "_output.mp4")
 
-        self.resize_back_frames_and_save(resized_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
+        self.resize_back_frames_and_save(output_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
         return output_video_path
