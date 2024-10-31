@@ -32,7 +32,8 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.models.resnet import InflatedConv3d
 
-from sam2.build_sam import build_sam2_video_predictor
+from sam2.build_sam import build_sam2_video_predictor, build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 from mimo.training.training_utils import get_torch_weight_dtype, get_last_checkpoint
 from mimo.training.models import Net
@@ -50,10 +51,10 @@ from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPre
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.utils.pose_4DH_utils import HMR2_4dhuman
 
-from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing
+from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing, resize_frame
 from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
 from mimo.dataset_preprocessing.human_detection_detectron2 import get_cfg_settings, post_processing_detectron2
-from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers
+from mimo.dataset_preprocessing.video_tracking_sam2 import get_instance_sam_output, process_layers, get_index_first_frame_with_character, get_global_index_most_central_human_in_frame
 from mimo.dataset_preprocessing.video_inpainting import inpaint_frames
 from mimo.dataset_preprocessing.get_apose_ref import get_apose_ref_img
 from mimo.dataset_preprocessing.pose_estimation_4DH import get_cfg, get_data_from_4DH
@@ -533,6 +534,49 @@ class InferencePipeline():
 
         video2.release()
 
+    def get_avatar_sam2_mask(self, avatar_image, data_pred_boxes):
+        checkpoint = os.path.join(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
+        model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+
+        sam2_model = build_sam2(model_cfg, checkpoint)
+        predictor = SAM2ImagePredictor(sam2_model)
+
+        predictor = self.accelerator.prepare(predictor)
+
+        predictor.set_image(cv2.cvtColor(avatar_image, cv2.COLOR_BGR2RGB))
+
+        masks, scores, _ = predictor.predict(
+            point_coords=None,
+            point_labels=None,
+            box=data_pred_boxes,
+            multimask_output=False,
+        )
+
+        return masks.transpose(1, 2, 0)
+
+    def get_avatar_image(self, input_avatar_image_path):
+        avatar_image = resize_frame(cv2.imread(input_avatar_image_path), self.input_net_size)
+        print("np.shape(avatar_image)", np.shape(avatar_image), type(avatar_image))
+
+        detectron2_avatar_output = self.get_detectron2_output([avatar_image])
+        print("np.shape(detectron2_avatar_output['data_frame_index'])", np.shape(detectron2_avatar_output['data_frame_index']), type(detectron2_avatar_output['data_frame_index']))
+        print("np.shape(detectron2_avatar_output['data_pred_boxes'])", np.shape(detectron2_avatar_output['data_pred_boxes']), type(detectron2_avatar_output['data_pred_boxes']))
+        print("np.shape(detectron2_avatar_output['data_scores'])", np.shape(detectron2_avatar_output['data_scores']), type(detectron2_avatar_output['data_scores']))
+        print("np.shape(detectron2_avatar_output['data_pred_classes'])", np.shape(detectron2_avatar_output['data_pred_classes']), type(detectron2_avatar_output['data_pred_classes']))
+        print("np.shape(detectron2_avatar_output['data_pred_masks'])", np.shape(detectron2_avatar_output['data_pred_masks']), type(detectron2_avatar_output['data_pred_masks']))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        i_frame = get_index_first_frame_with_character(detectron2_avatar_output, self.score_threshold_detectron2)
+        i_global = get_global_index_most_central_human_in_frame(detectron2_avatar_output, i_frame, self.score_threshold_detectron2, self.input_net_size, self.input_net_size)
+
+        masks = self.get_avatar_sam2_mask(avatar_image, detectron2_avatar_output['data_pred_boxes'][i_global])
+        print("np.shape(masks)", np.shape(masks), type(masks))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        return (avatar_image*masks).astype(np.uint8)
+
     def __call__(self, input_video_path, input_avatar_image_path, input_motion_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
 
@@ -557,7 +601,6 @@ class InferencePipeline():
         resized_frames = np.array(sampling_resizing(frame_gen, 
                                            frames_per_second, 
                                            output_fps=self.input_net_fps, 
-                                           input_size=(width, height), 
                                            output_width=self.input_net_size))
         print("np.shape(resized_frames)", np.shape(resized_frames), type(resized_frames))
         get_gpu_memory_usage()
@@ -588,7 +631,21 @@ class InferencePipeline():
         get_gpu_memory_usage()
 
         if input_motion_video_path is not None:
-            joints2d = self.get_joints2d(input_motion_video_path)
+            video_motion = cv2.VideoCapture(input_motion_video_path)
+            frames_per_second_motion = video_motion.get(cv2.CAP_PROP_FPS)
+            frame_gen_motion = np.array(list(frame_gen_from_video(video_motion)))
+            video_motion.release()
+            
+            resized_motion_frames = np.array(sampling_resizing(frame_gen_motion, 
+                                           frames_per_second_motion, 
+                                           output_fps=self.input_net_fps, 
+                                           output_width=self.input_net_size))
+            temp_motion_video_path = create_video_from_frames(resized_motion_frames, self.input_net_fps)
+            del frame_gen_motion, resized_motion_frames
+            
+            # TODO: check if character is present and adapt animation length to input video
+            joints2d = self.get_joints2d(temp_motion_video_path)
+            remove_tmp_dir(temp_motion_video_path)
         else:
             joints2d = self.get_joints2d(temp_input_video_path)
         print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
@@ -608,8 +665,11 @@ class InferencePipeline():
         get_gpu_memory_usage()
 
         if input_avatar_image_path is not None:
-            avatar_image = cv2.imread(input_avatar_image_path)
+            avatar_image = self.get_avatar_image(input_avatar_image_path)
+            print("np.shape(avatar_image)", np.shape(avatar_image), type(avatar_image))
+            # cv2.imwrite("../../data/iron_man_square.png", avatar_image)
             apose_ref = self.get_apose_ref([avatar_image])
+            # cv2.imwrite("../../data/iron_man_square_a_pose.png", apose_ref)
         else:
             apose_ref = self.get_apose_ref(resized_frames)
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
