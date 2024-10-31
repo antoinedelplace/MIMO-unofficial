@@ -593,7 +593,7 @@ class InferencePipeline():
         print("frames_per_second", frames_per_second)
         print("num_frames", num_frames)
 
-        frame_gen = np.array(list(frame_gen_from_video(video)))[:50] # TODO: remove debug
+        frame_gen = np.array(list(frame_gen_from_video(video)))
         print("np.shape(frame_gen)", np.shape(frame_gen), type(frame_gen))
         video.release()
         get_gpu_memory_usage()
