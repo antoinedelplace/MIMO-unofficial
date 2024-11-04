@@ -360,7 +360,7 @@ def main(
 
     set_memory_limit(cpu_memory_limit_gb)
     checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
-    model_cfg = assert_file_exist(SAM2_REPO, "sam2/configs/sam2.1/sam2.1_hiera_l.yaml")
+    model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
     predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
     # input_files = ["03ecb2c8-7e3f-42df-96bc-9723335397d9-original.mp4"]
