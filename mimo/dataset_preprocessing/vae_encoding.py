@@ -78,7 +78,8 @@ def inpaint_mirror_for_vertical_videos(frame_gen, ori_width, ori_height, input_n
 def get_latent_scene(input_path, vae, output_folder=None):
     assert_file_exist(input_path)
     video_scene = cv2.VideoCapture(input_path)
-    frame_gen_scene = frame_gen_from_video(video_scene)
+    frame_gen_scene = np.array(list(frame_gen_from_video(video_scene)))
+    print("np.shape(frame_gen_scene)", np.shape(frame_gen_scene))
 
     latent_scene = np.concatenate(list(vae.encode(frame_gen_scene)))
     print("np.shape(latent_scene)", np.shape(latent_scene))
