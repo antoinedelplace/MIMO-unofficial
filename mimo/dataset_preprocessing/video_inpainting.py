@@ -34,6 +34,11 @@ def run_on_video(input_path, predictor, output_folder):
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frames_per_second = video.get(cv2.CAP_PROP_FPS)
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    print("basename", basename)
+    print("width", width)
+    print("height", height)
+    print("frames_per_second", frames_per_second)
+    print("num_frames", num_frames)
 
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename),
@@ -50,10 +55,25 @@ def run_on_video(input_path, predictor, output_folder):
     video.release()
     output_file.release()
 
+    video_path = assert_file_exist(output_folder, basename)
+    video2 = cv2.VideoCapture(video_path)
+
+    width = int(video2.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video2.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frames_per_second = video2.get(cv2.CAP_PROP_FPS)
+    num_frames = int(video2.get(cv2.CAP_PROP_FRAME_COUNT))
+    print("basename", basename)
+    print("width", width)
+    print("height", height)
+    print("frames_per_second", frames_per_second)
+    print("num_frames", num_frames)
+
+    video2.release()
+
 def main(
         input_folder=SCENE_FOLDER,
         output_folder=FILLED_SCENE_FOLDER,
-        batch_size=128,
+        batch_size=64,
         workers=8,
         cpu_memory_limit_gb=60
         ):

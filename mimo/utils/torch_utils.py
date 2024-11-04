@@ -63,11 +63,18 @@ class VideoDatasetSlidingWindow(Dataset):
         self.window_length = window_length
         self.window_stride = window_stride
 
-        self.num_windows = (len(self.frames)+self.window_stride-1) // self.window_stride
+        self.num_frames = len(self.frames)
+
+        self.num_windows = ((max(0, self.num_frames - self.window_length) + self.window_stride - 1) // self.window_stride) + 1
 
     def __getitem__(self, index) -> ndarray:
         start = index * self.window_stride
         end = start + self.window_length
+
+        if end > self.num_frames:
+            start = self.num_frames - self.window_length
+            end = self.num_frames
+            
         return self.frames[start:end]
 
     def __len__(self):

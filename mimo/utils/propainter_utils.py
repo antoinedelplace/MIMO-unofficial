@@ -11,7 +11,6 @@ import scipy
 from torch.utils.data import DataLoader
 
 from mimo.utils.torch_utils import VideoDatasetSlidingWindow
-from mimo.utils.general_utils import assert_file_exist
 
 from model.modules.flow_comp_raft import RAFT_bi
 from model.recurrent_flow_completion import RecurrentFlowCompleteNet
@@ -61,6 +60,7 @@ class ProPainterBatchPredictor():
             pin_memory=True
         )
         with torch.no_grad():
+            count_frames = 0
             for i_batch, (batch, masks_dilated) in enumerate(loader):
                 batch_gpu = batch.to(self.device)
                 masks_gpu = masks_dilated.to(self.device)
@@ -90,15 +90,22 @@ class ProPainterBatchPredictor():
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(loader)-1:
+                    start = len(update_batch_gpu) - (dataset.num_frames-count_frames)
                     end = len(update_batch_gpu)
-                yield update_batch_gpu[start:end], masks_gpu[0, start:end, 0, :, :].cpu().float().numpy()
+                
+                output_images = update_batch_gpu[start:end]  # transformations already done
+                output_mask = masks_gpu[0, start:end, 0, :, :].cpu().float().numpy()
+
+                count_frames += len(output_images)
+
+                yield output_images, output_mask
 
     def load_models(self):
-        ckpt_path = load_file_from_url(url=assert_file_exist(pretrain_model_url, 'raft-things.pth'), 
+        ckpt_path = load_file_from_url(url=os.path.join(pretrain_model_url, 'raft-things.pth'), 
                                         model_dir=self.checkpoint_folder, progress=True, file_name=None)
         fix_raft = RAFT_bi(ckpt_path, self.device)
         
-        ckpt_path = load_file_from_url(url=assert_file_exist(pretrain_model_url, 'recurrent_flow_completion.pth'), 
+        ckpt_path = load_file_from_url(url=os.path.join(pretrain_model_url, 'recurrent_flow_completion.pth'), 
                                         model_dir=self.checkpoint_folder, progress=True, file_name=None)
         fix_flow_complete = RecurrentFlowCompleteNet(ckpt_path)
         for p in fix_flow_complete.parameters():
@@ -106,7 +113,7 @@ class ProPainterBatchPredictor():
         fix_flow_complete.to(self.device)
         fix_flow_complete.eval()
 
-        ckpt_path = load_file_from_url(url=assert_file_exist(pretrain_model_url, 'ProPainter.pth'), 
+        ckpt_path = load_file_from_url(url=os.path.join(pretrain_model_url, 'ProPainter.pth'), 
                                         model_dir=self.checkpoint_folder, progress=True, file_name=None)
         model = InpaintGenerator(model_path=ckpt_path).to(self.device)
         model.eval()
