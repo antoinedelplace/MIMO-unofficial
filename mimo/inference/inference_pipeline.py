@@ -541,7 +541,7 @@ class InferencePipeline():
 
     def get_avatar_sam2_mask(self, avatar_image, data_pred_boxes):
         checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
-        model_cfg = assert_file_exist(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+        model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
 
         sam2_model = build_sam2(model_cfg, checkpoint)
         predictor = SAM2ImagePredictor(sam2_model)
