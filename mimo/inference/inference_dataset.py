@@ -60,7 +60,7 @@ class InferenceDataset(Dataset):
         end = start + self.window_length
 
         if end > self.num_frames:
-            start = self.num_frames - self.window_length
+            start = max(0, self.num_frames - self.window_length)
             end = self.num_frames
 
         rast_2d = mirror_padding(self.rast_2d_joints, start, end, self.window_length)

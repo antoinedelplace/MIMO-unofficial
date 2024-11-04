@@ -251,7 +251,7 @@ class InferencePipeline():
     
     def get_layers_sam2(self, input_video_path, resized_frames, detectron2_output, depth_frames):
         checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
-        model_cfg = assert_file_exist(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
+        model_cfg = assert_file_exist(SAM2_REPO, "sam2/configs/sam2.1/sam2.1_hiera_l.yaml")
         predictor = build_sam2_video_predictor(model_cfg, checkpoint)
 
         predictor = self.accelerator.prepare(predictor)
@@ -477,6 +477,8 @@ class InferencePipeline():
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(dataloader)-1:
+                    if count_frames >= num_frames:
+                        raise Exception(f"Something went wrong with the sliding window. Num_frames={num_frames}. Count_frames={count_frames}. Len(latents)={len(latents)}. ")
                     start = len(latents) - (num_frames-count_frames)
                     end = len(latents)
                 

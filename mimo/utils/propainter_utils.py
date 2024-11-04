@@ -90,6 +90,8 @@ class ProPainterBatchPredictor():
                 if i_batch == 0:
                     start = 0
                 if i_batch == len(loader)-1:
+                    if count_frames >= dataset.num_frames:
+                        raise Exception(f"Something went wrong with the sliding window. Num_frames={dataset.num_frames}. Count_frames={count_frames}. Len(update_batch_gpu)={len(update_batch_gpu)}. ")
                     start = len(update_batch_gpu) - (dataset.num_frames-count_frames)
                     end = len(update_batch_gpu)
                 

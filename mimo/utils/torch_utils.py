@@ -72,7 +72,7 @@ class VideoDatasetSlidingWindow(Dataset):
         end = start + self.window_length
 
         if end > self.num_frames:
-            start = self.num_frames - self.window_length
+            start = max(0, self.num_frames - self.window_length)
             end = self.num_frames
             
         return self.frames[start:end]
