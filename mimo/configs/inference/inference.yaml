@@ -34,4 +34,4 @@ noise_scheduler_kwargs:
 
 sampler: DDIM
 
-load_from_checkpoint: '../../checkpoints/train_outputs/model-test2-checkpoint-19215.safetensors'
+load_from_checkpoint: '../../checkpoints/train_outputs/model-test3-checkpoint-30001.safetensors'
