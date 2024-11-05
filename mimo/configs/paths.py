@@ -12,6 +12,7 @@ PHALP_REPO          = "../PHALP"
 NVDIFFRAST_REPO     = "../nvdiffrast"
 PROPAINTER_REPO     = "../ProPainter"
 SAM2_REPO           = "../sam2"
+MIMIC_MOTION_REPO   = "../MimicMotion"
 
 # Data
 RAW_FOLDER                     = os.path.join(DATA_FOLDER, "data")
