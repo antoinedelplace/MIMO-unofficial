@@ -6,6 +6,7 @@ import random
 
 import torch
 from torch.utils.data import Dataset
+from torchvision.transforms.functional import pad
 
 from numpy import ndarray
 import numpy as np
@@ -92,3 +93,25 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed % (2**32))
     random.seed(seed)
+
+def center_pad(image_pixels, target_size, fill=0):
+    # Can be used instead of center_crop from torchvision.transforms.functional
+
+    target_height, target_width = target_size
+    current_height, current_width = image_pixels.shape[-2:]
+    
+    scale = min(target_height / current_height, target_width / current_width)
+    
+    new_height = int(current_height * scale)
+    new_width = int(current_width * scale)
+    
+    pad_top = (target_height - new_height) // 2
+    pad_bottom = target_height - new_height - pad_top
+    pad_left = (target_width - new_width) // 2
+    pad_right = target_width - new_width - pad_left
+    
+    image_pixels_resized = torch.nn.functional.interpolate(image_pixels.unsqueeze(0), size=(new_height, new_width), mode="bilinear", align_corners=False).squeeze(0)
+    
+    image_pixels_padded = pad(image_pixels_resized, [pad_left, pad_top, pad_right, pad_bottom], fill=fill)
+
+    return image_pixels_padded

@@ -17,7 +17,9 @@ from utils.loader import create_pipeline
 from dwpose.preprocess import get_image_pose
 from dwpose.util import draw_pose
 
-from torchvision.transforms.functional import pil_to_tensor, resize, center_crop
+from torchvision.transforms.functional import pil_to_tensor, resize
+
+from mimo.utils.torch_utils import center_pad
 
 # w/h aspect ratio
 ASPECT_RATIO = 9 / 16
@@ -150,7 +152,7 @@ class ReposerPredictor(Predictor):
             h_resize, w_resize = int(w_target * h_w_ratio), w_target
 
         image_pixels = resize(image_pixels, [h_resize, w_resize], antialias=None)
-        image_pixels = center_crop(image_pixels, [h_target, w_target])
+        image_pixels = center_pad(image_pixels, [h_target, w_target])
         image_pixels = image_pixels.permute((1, 2, 0)).numpy()
 
         return image_pixels
