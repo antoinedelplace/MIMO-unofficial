@@ -353,6 +353,9 @@ def main(
         score_threshold = 0.9,
         cpu_memory_limit_gb=60
         ):
+    if score_threshold < 0.0 or score_threshold > 1.0:
+        raise Exception(f"score_threshold parameter should be between 0.0 and 1.0. score_threshold={score_threshold}")
+
     os.makedirs(human_output_folder, exist_ok=True)
     os.makedirs(scene_output_folder, exist_ok=True)
     os.makedirs(occlusion_output_folder, exist_ok=True)
