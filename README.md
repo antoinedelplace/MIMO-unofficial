@@ -56,7 +56,8 @@ See `configs/paths.py`
 Here are the checkpoints to download:
 - [depth_anything_v2_vitl.pth](https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth)
 - [sam2.1_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt)
-Some checkpoints are automatically downloaded from HuggingFace but require manual acceptance of the terms and conditions. You can accept these terms with your HuggingFace account, then log in to the server using `huggingface-cli login`
+
+Some checkpoints are automatically downloaded from 🤗 Hugging Face but require manual acceptance of the terms and conditions. You can accept these terms with your 🤗 Hugging Face account, then log in to the server using `huggingface-cli login`
 
 ### Extra steps
 - For `mimo/dataset_preprocessing/pose_estimation_4DH.py`
