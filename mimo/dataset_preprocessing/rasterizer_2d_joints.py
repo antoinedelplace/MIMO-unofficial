@@ -6,6 +6,7 @@ import numpy as np
 
 from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.rasterizer_utils import RasterizerBatchPredictor
+from mimo.utils.video_utils import is_video_empty
 
 from mimo.configs.paths import POSES_4DH_FOLDER, RASTERIZED_2D_JOINTS_FOLDER
 
@@ -62,7 +63,8 @@ def main(
     for filename in tqdm.tqdm(input_files):
         basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
         if basename_wo_ext in output_files:
-            continue
+            if not is_video_empty(os.path.join(output_folder, f"{basename_wo_ext}.mp4")):
+                continue
 
         input_path = os.path.join(input_folder, filename)
         try_wrapper(lambda: run_on_video(input_path, fps, rasterizer, output_folder), filename, log_path)

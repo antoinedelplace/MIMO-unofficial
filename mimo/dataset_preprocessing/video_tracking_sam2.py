@@ -15,7 +15,7 @@ from detectron2.structures import Instances, Boxes
 
 from sam2.build_sam import build_sam2_video_predictor
 
-from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.video_utils import frame_gen_from_video, is_video_empty
 from mimo.utils.general_utils import iou, set_memory_limit, try_wrapper, parse_args, assert_file_exist
 
 
@@ -370,7 +370,8 @@ def main(
     for filename in tqdm.tqdm(input_files):
         basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
         if basename_wo_ext in output_files:
-            continue
+            if not is_video_empty(os.path.join(human_output_folder, f"{basename_wo_ext}.mp4")):
+                continue
 
         input_path = os.path.join(input_folder, filename)
         try_wrapper(lambda: run_on_video(

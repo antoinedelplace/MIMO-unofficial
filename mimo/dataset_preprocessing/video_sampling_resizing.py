@@ -4,7 +4,7 @@ sys.path.append(".")
 import os, cv2, tqdm
 import numpy as np
 
-from mimo.utils.video_utils import frame_gen_from_video
+from mimo.utils.video_utils import frame_gen_from_video, is_video_empty
 from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 
 from mimo.configs.paths import RAW_FOLDER, RESIZED_FOLDER
@@ -117,7 +117,8 @@ def main(
     for filename in tqdm.tqdm(input_files):
         basename_wo_ext = os.path.splitext(os.path.basename(filename))[0]
         if basename_wo_ext in output_files:
-            continue
+            if not is_video_empty(os.path.join(output_folder, f"{basename_wo_ext}.mp4")):
+                continue
 
         input_path = os.path.join(input_folder, filename)
         try_wrapper(lambda: process_video(input_path, output_size, output_fps, input_fps, output_folder), filename, log_path)

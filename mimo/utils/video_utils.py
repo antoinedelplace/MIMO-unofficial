@@ -1,3 +1,4 @@
+import os
 import cv2
 import hashlib
 
@@ -33,3 +34,12 @@ def save_video(video_path, fps, width, height, frames):
         out.write(frame)
 
     out.release()
+
+def is_video_empty(video_path):
+    if not os.path.exists(video_path):
+        return True
+    
+    video = cv2.VideoCapture(video_path)
+    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    return num_frames == 0
