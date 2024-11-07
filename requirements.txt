@@ -39,3 +39,6 @@ mlflow
 h5py
 
 gputil
+
+# For Flux Pipeline
+sentencepiece

@@ -8,7 +8,7 @@ from mimo.utils.video_utils import frame_gen_from_video
 from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 
-from mimo.configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER, APOSE_REF_FOLDER, RAW_FOLDER
+from mimo.configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER, UPSCALED_APOSE_FOLDER, RAW_FOLDER
 
 
 def visualize(vae, latent, video, input_path, output_folder):
@@ -168,7 +168,7 @@ def main(
         scene_input_folder=FILLED_SCENE_FOLDER,
         occlusion_input_folder=OCCLUSION_FOLDER,
         resized_folder=RESIZED_FOLDER,
-        apose_ref_folder=APOSE_REF_FOLDER,
+        apose_ref_folder=UPSCALED_APOSE_FOLDER,
         raw_input_folder=RAW_FOLDER,
         output_folder=ENCODED_OCCLUSION_SCENE_FOLDER,
         batch_size=16,

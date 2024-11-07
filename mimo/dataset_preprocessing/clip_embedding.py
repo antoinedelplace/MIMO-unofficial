@@ -7,7 +7,7 @@ import numpy as np
 from mimo.utils.general_utils import try_wrapper, set_memory_limit, parse_args, assert_file_exist
 from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 
-from mimo.configs.paths import APOSE_REF_FOLDER, APOSE_CLIP_EMBEDS_FOLDER
+from mimo.configs.paths import UPSCALED_APOSE_FOLDER, APOSE_CLIP_EMBEDS_FOLDER
 
 
 def run_on_image(input_path, clip, output_folder):
@@ -24,7 +24,7 @@ def run_on_image(input_path, clip, output_folder):
                         image_embeds=image_embeds)
 
 def main(
-        input_folder=APOSE_REF_FOLDER,
+        input_folder=UPSCALED_APOSE_FOLDER,
         output_folder=APOSE_CLIP_EMBEDS_FOLDER,
         batch_size=16,
         workers=8,

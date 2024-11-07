@@ -125,6 +125,7 @@ See `configs/paths.py`
 1. `mimo/dataset_preprocessing/video_tracking_sam2.py`
 1. `mimo/dataset_preprocessing/video_inpainting.py`
 1. `mimo/dataset_preprocessing/get_apose_ref.py`
+1. `mimo/dataset_preprocessing/upscale_apose_ref.py`
 1. `mimo/dataset_preprocessing/vae_encoding.py`
 1. `mimo/dataset_preprocessing/clip_embedding.py`
 1. `mimo/dataset_preprocessing/pose_estimation_4DH.py`
