@@ -50,6 +50,7 @@ from mimo.utils.apose_ref_utils import download_base_model, download_anyone, dow
 from mimo.utils.clip_embedding_utils import download_image_encoder, CLIPBatchPredictor
 from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.utils.pose_4DH_utils import HMR2_4dhuman
+from mimo.utils.flux_utils import UpscalerPredictor
 
 from mimo.dataset_preprocessing.video_sampling_resizing import sampling_resizing, resize_frame
 from mimo.dataset_preprocessing.depth_estimation import DEPTH_ANYTHING_MODEL_CONFIGS, get_depth
@@ -85,6 +86,7 @@ class InferencePipeline():
             batch_size_vae,
             batch_size_rasterizer
         ):
+        self.seed = seed
         self.num_scheduler_steps = num_scheduler_steps
         self.guidance_scale = guidance_scale
         self.num_workers = num_workers
@@ -105,7 +107,7 @@ class InferencePipeline():
 
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
-        seed_everything(seed)
+        seed_everything(self.seed)
 
         self.weight_dtype_str = weight_dtype
         self.weight_dtype = get_torch_weight_dtype(weight_dtype)
@@ -292,6 +294,18 @@ class InferencePipeline():
         a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path, dw_pose_detector)
 
         return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d, dw_pose_detector)
+
+    def upscale_apose(self, a_pose_ref):
+        prompt = "Someone in A pose"
+        num_inference_steps=24, 
+        denoise_strength=0.3, 
+        cfg_guidance_scale=3.5
+
+        upscaler = UpscalerPredictor(num_inference_steps, denoise_strength, cfg_guidance_scale, self.seed)
+
+        upscaler.pipeline = self.accelerator.prepare(upscaler.pipeline)
+
+        return upscaler(a_pose_ref, prompt)
 
     def clip_apose(self, apose_ref):
         download_image_encoder()
@@ -681,6 +695,11 @@ class InferencePipeline():
         else:
             apose_ref = self.get_apose_ref(resized_frames)
         del resized_frames
+        print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        apose_ref = self.upscale_apose(apose_ref)
         print("np.shape(apose_ref)", np.shape(apose_ref), type(apose_ref))
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
