@@ -108,7 +108,7 @@ class TrainingPipeline:
         )
 
         ## Freeze
-        reference_unet.requires_grad_(False)
+        # reference_unet.requires_grad_(False)
         # denoising_unet.requires_grad_(False)
         # pose_guider.requires_grad_(False)
 
