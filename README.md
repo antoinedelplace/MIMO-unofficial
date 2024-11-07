@@ -37,7 +37,6 @@ See `configs/paths.py`
 │   ├── detectron2
 │   ├── sam2
 │   ├── nvdiffrast
-│   ├── MimicMotion
 │   └── ProPainter
 ├── checkpoints
 └── data
@@ -51,13 +50,11 @@ See `configs/paths.py`
 - [detectron2](https://github.com/facebookresearch/detectron2)
 - [sam2](https://github.com/facebookresearch/sam2)
 - [nvdiffrast](https://github.com/NVlabs/nvdiffrast)
-- [MimicMotion](https://github.com/Tencent/MimicMotion)
 - [ProPainter](https://github.com/sczhou/ProPainter.git)
 
 ### Download checkpoints
 - [depth_anything_v2_vitl.pth](https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth)
 - [sam2.1_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt)
-- [MimicMotion_1-1.pth](https://huggingface.co/tencent/MimicMotion/resolve/main/MimicMotion_1-1.pth)
 
 ### Extra steps
 - For `mimo/dataset_preprocessing/pose_estimation_4DH.py`
