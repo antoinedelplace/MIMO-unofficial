@@ -138,7 +138,8 @@ class TrainingPipeline:
         
         if self.cfg.solver.gradient_checkpointing:
             reference_unet.enable_gradient_checkpointing()
-            denoising_unet.enable_gradient_checkpointing()
+            # Gradient checkpointing triggers an error when reference_unet is not freezed (Trying to backward through the graph a second time)
+            # denoising_unet.enable_gradient_checkpointing()
         
         model = Net(
             reference_unet,
