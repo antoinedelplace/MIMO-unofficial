@@ -80,3 +80,21 @@ def get_last_checkpoint(folder):
     global_step = int(path.split("-")[1])
 
     return path, global_step
+
+def freeze_top_layer_reference_unet(reference_unet):
+    #  Some top layer parames of reference_unet don't need grad
+    for name, param in reference_unet.named_parameters():
+        if "up_blocks.3" in name:
+            param.requires_grad_(False)
+        else:
+            param.requires_grad_(True)
+    
+    return reference_unet
+
+def unfreeze_motion_module(denoising_unet):
+    for name, module in denoising_unet.named_modules():
+        if "motion_modules" in name:
+            for params in module.parameters():
+                params.requires_grad = True
+    
+    return denoising_unet

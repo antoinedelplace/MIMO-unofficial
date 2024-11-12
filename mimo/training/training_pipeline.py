@@ -39,7 +39,7 @@ from mimo.utils.apose_ref_utils import download_base_model, download_anyone
 from mimo.utils.torch_utils import seed_everything
 from mimo.utils.general_utils import assert_file_exist
 
-from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint, get_last_checkpoint
+from mimo.training.training_utils import get_torch_weight_dtype, compute_snr, save_checkpoint, get_last_checkpoint, freeze_top_layer_reference_unet, unfreeze_motion_module
 from mimo.training.training_dataset import TrainingDataset, collate_fn
 from mimo.training.models import Net
 
@@ -108,15 +108,11 @@ class TrainingPipeline:
         )
 
         ## Freeze
+        reference_unet = freeze_top_layer_reference_unet(reference_unet)
         # reference_unet.requires_grad_(False)
         # denoising_unet.requires_grad_(False)
         # pose_guider.requires_grad_(False)
-
-        # Set motion module learnable
-        for name, module in denoising_unet.named_modules():
-            if "motion_modules" in name:
-                for params in module.parameters():
-                    params.requires_grad = True
+        # denoising_unet = unfreeze_motion_module(denoising_unet)
         
         reference_control_writer = ReferenceAttentionControl(
             reference_unet,
