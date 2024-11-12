@@ -11,7 +11,9 @@ from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER, UPSCALED_APOSE_FOLDER, RAW_FOLDER
 
 
-def visualize(vae, latent, video, input_path, output_folder):
+def visualize_video(vae, latent, video, input_path, output_folder):
+    os.makedirs(output_folder, exist_ok=True)
+
     basename = os.path.basename(input_path)
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -36,6 +38,15 @@ def visualize(vae, latent, video, input_path, output_folder):
             output_file.write(frame)
 
     output_file.release()
+
+def visualize_image(vae, latent, basename, output_folder):
+    os.makedirs(output_folder, exist_ok=True)
+
+    output = np.concatenate(list(vae.decode(latent)))
+    print("np.shape(output)", np.shape(output))
+    output_path = os.path.join(output_folder, basename)
+
+    cv2.imwrite(output_path, output[0])
 
 def get_original_width_height(basename, raw_input_folder):
     video_path = assert_file_exist(raw_input_folder, basename)
@@ -84,7 +95,7 @@ def get_latent_scene(input_path, vae, output_folder=None):
     latent_scene = np.concatenate(list(vae.encode(frame_gen_scene)))
     print("np.shape(latent_scene)", np.shape(latent_scene))
     if output_folder is not None:
-        visualize(vae, latent_scene, video_scene, input_path, output_folder)
+        visualize_video(vae, latent_scene, video_scene, input_path, output_folder)
 
     video_scene.release()
 
@@ -107,7 +118,7 @@ def get_latent_occlusion(basename, occlusion_input_folder, ori_width, ori_height
     latent_occlusion = np.concatenate(list(vae.encode(frame_gen_occlusion_filtered)))
     print("np.shape(latent_occlusion)", np.shape(latent_occlusion))
     if output_folder is not None:
-        visualize(vae, latent_occlusion, video_occlusion, video_path, output_folder)
+        visualize_video(vae, latent_occlusion, video_occlusion, video_path, output_folder)
     
     video_occlusion.release()
 
@@ -130,17 +141,20 @@ def get_latent_video(input_path, basename, resized_folder, ori_width, ori_height
     latent_video = np.concatenate(list(vae.encode(frame_gen_video_filtered)))
     print("np.shape(latent_video)", np.shape(latent_video))
     if output_folder is not None:
-        visualize(vae, latent_video, video_ori, input_path, output_folder)
+        visualize_video(vae, latent_video, video_ori, input_path, output_folder)
     
     video_ori.release()
 
     return latent_video
 
-def get_latent_apose(basename, apose_ref_folder, vae):
+def get_latent_apose(basename, apose_ref_folder, vae, output_folder=None):
     image_path = assert_file_exist(apose_ref_folder, basename.replace(".mp4", ".png"))
     a_pose = cv2.imread(image_path)
     latent_apose = np.concatenate(list(vae.encode([a_pose])))
     print("np.shape(latent_apose)", np.shape(latent_apose))
+
+    if output_folder is not None:
+        visualize_image(vae, latent_apose, basename.replace(".mp4", ".png"), output_folder)
 
     return latent_apose
 

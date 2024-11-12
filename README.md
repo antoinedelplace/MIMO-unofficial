@@ -57,7 +57,8 @@ Here are the checkpoints to download:
 - [depth_anything_v2_vitl.pth](https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth)
 - [sam2.1_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt)
 
-Some checkpoints are automatically downloaded from 🤗 Hugging Face but require manual acceptance of the terms and conditions. You can accept these terms with your 🤗 Hugging Face account, then log in to the server using `huggingface-cli login`
+Some checkpoints are automatically downloaded from 🤗 Hugging Face but require manual acceptance of the terms and conditions. You can accept these terms with your 🤗 Hugging Face account, then log in to the server using `huggingface-cli login`. Here are the gated models:
+- [black-forest-labs/FLUX.1-dev](https://huggingface.co/black-forest-labs/FLUX.1-dev)
 
 ### Extra steps
 - For `mimo/dataset_preprocessing/pose_estimation_4DH.py`
@@ -118,18 +119,18 @@ Some checkpoints are automatically downloaded from 🤗 Hugging Face but require
 
 ## 🚀 Run scripts
 ### Dataset Preprocessing
-1. `mimo/dataset_preprocessing/video_sampling_resizing.py`
-1. `mimo/dataset_preprocessing/remove_duplicate_videos.py`
-1. `mimo/dataset_preprocessing/human_detection_detectron2.py`
-1. `mimo/dataset_preprocessing/depth_estimation.py`
-1. `mimo/dataset_preprocessing/video_tracking_sam2.py`
-1. `mimo/dataset_preprocessing/video_inpainting.py`
-1. `mimo/dataset_preprocessing/get_apose_ref.py`
-1. `mimo/dataset_preprocessing/upscale_apose_ref.py`
-1. `mimo/dataset_preprocessing/vae_encoding.py`
-1. `mimo/dataset_preprocessing/clip_embedding.py`
-1. `mimo/dataset_preprocessing/pose_estimation_4DH.py`
-1. `mimo/dataset_preprocessing/rasterizer_2d_joints.py`
+1. `python mimo/dataset_preprocessing/video_sampling_resizing.py`
+1. `python mimo/dataset_preprocessing/remove_duplicate_videos.py`
+1. `python mimo/dataset_preprocessing/human_detection_detectron2.py`
+1. `python mimo/dataset_preprocessing/depth_estimation.py`
+1. `python mimo/dataset_preprocessing/video_tracking_sam2.py`
+1. `python mimo/dataset_preprocessing/video_inpainting.py`
+1. `python mimo/dataset_preprocessing/get_apose_ref.py`
+1. `python mimo/dataset_preprocessing/upscale_apose_ref.py`
+1. `python mimo/dataset_preprocessing/vae_encoding.py`
+1. `python mimo/dataset_preprocessing/clip_embedding.py`
+1. `python mimo/dataset_preprocessing/pose_estimation_4DH.py`
+1. `python mimo/dataset_preprocessing/rasterizer_2d_joints.py`
 
 ### Inference
 ```bash
