@@ -83,7 +83,7 @@ def get_begin_frame(input_files, window_length, window_stride, detectron_score_t
 
 
 class TrainingDataset(Dataset):
-    def __init__(self, window_length, window_stride, detectron_score_threshold = 0.9):
+    def __init__(self, window_length, window_stride, accelerator, detectron_score_threshold = 0.9):
         super().__init__()
         os.makedirs(TRAIN_OUTPUTS, exist_ok=True)
 
@@ -103,10 +103,11 @@ class TrainingDataset(Dataset):
 
             self.input_filename, self.begin_frame_scene, self.begin_frame_video = get_begin_frame(input_files, window_length, window_stride, detectron_score_threshold)
 
-            with h5py.File(dataset_init_path, "w") as f:
-                f.create_dataset("input_filename", data=np.array(self.input_filename, dtype="S"), compression="gzip")
-                f.create_dataset("begin_frame_scene", data=np.array(self.begin_frame_scene, dtype=np.int32), compression="gzip")
-                f.create_dataset("begin_frame_video", data=np.array(self.begin_frame_video, dtype=np.int32), compression="gzip")
+            if accelerator.is_main_process:
+                with h5py.File(dataset_init_path, "w") as f:
+                    f.create_dataset("input_filename", data=np.array(self.input_filename, dtype="S"), compression="gzip")
+                    f.create_dataset("begin_frame_scene", data=np.array(self.begin_frame_scene, dtype=np.int32), compression="gzip")
+                    f.create_dataset("begin_frame_video", data=np.array(self.begin_frame_video, dtype=np.int32), compression="gzip")
 
     def __getitem__(self, index):
         filename = self.input_filename[index]

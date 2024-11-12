@@ -63,7 +63,7 @@ class TrainingPipeline:
         self.train_noise_scheduler, self.val_noise_scheduler = self.get_noise_scheduler()
         self.optimizer = self.get_optimizer(self.trainable_params, self.learning_rate)
         self.lr_scheduler = self.get_lr_scheduler(self.optimizer)
-        self.train_dataloader, self.train_dataset, self.val_dataloader, self.val_dataset = self.get_dataloaders()
+        self.train_dataloader, self.train_dataset, self.val_dataloader, self.val_dataset = self.get_dataloaders(self.accelerator)
 
         self.validate_steps = (len(self.val_dataset)+self.accelerator.num_processes)//self.accelerator.num_processes
 
@@ -261,10 +261,11 @@ class TrainingPipeline:
             * self.cfg.solver.gradient_accumulation_steps,
         )
 
-    def get_dataloaders(self):
+    def get_dataloaders(self, accelerator):
         dataset = TrainingDataset(
             window_length=self.cfg.data.window_length, 
-            window_stride=self.cfg.data.window_stride
+            window_stride=self.cfg.data.window_stride,
+            accelerator=accelerator
         )
         train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.9, 0.1])
         train_dataloader = DataLoader(
