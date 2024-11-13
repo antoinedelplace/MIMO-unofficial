@@ -182,7 +182,7 @@ class TrainingPipeline:
             mixed_precision=self.cfg.solver.mixed_precision,
             log_with="mlflow",
             project_dir=ML_RUNS,
-            kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=False)],
+            kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=True)],
         )
 
     def get_logger(self, accelerator):
