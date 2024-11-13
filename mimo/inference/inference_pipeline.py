@@ -297,8 +297,8 @@ class InferencePipeline():
 
     def upscale_apose(self, a_pose_ref):
         prompt = "Someone in A pose"
-        num_inference_steps=24, 
-        denoise_strength=0.3, 
+        num_inference_steps=24
+        denoise_strength=0.3
         cfg_guidance_scale=3.5
 
         upscaler = UpscalerPredictor(num_inference_steps, denoise_strength, cfg_guidance_scale, self.seed)
