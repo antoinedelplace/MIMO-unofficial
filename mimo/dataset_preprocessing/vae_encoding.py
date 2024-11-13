@@ -11,24 +11,13 @@ from mimo.utils.vae_encoding_utils import download_vae, VaeBatchPredictor
 from mimo.configs.paths import FILLED_SCENE_FOLDER, OCCLUSION_FOLDER, ENCODED_OCCLUSION_SCENE_FOLDER, RESIZED_FOLDER, UPSCALED_APOSE_FOLDER, RAW_FOLDER
 
 
-def visualize_video(vae, latent, video, input_path, output_folder):
+def visualize_video(vae, latent, basename, width, height, fps, output_folder):
     os.makedirs(output_folder, exist_ok=True)
-
-    basename = os.path.basename(input_path)
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frames_per_second = video.get(cv2.CAP_PROP_FPS)
-    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    print("basename", basename)
-    print("width", width)
-    print("height", height)
-    print("frames_per_second", frames_per_second)
-    print("num_frames", num_frames)
 
     output_file = cv2.VideoWriter(
         filename=os.path.join(output_folder, basename),
         fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
-        fps=float(frames_per_second),
+        fps=float(fps),
         frameSize=(width, height),
         isColor=True,
     )
@@ -95,7 +84,18 @@ def get_latent_scene(input_path, vae, output_folder=None):
     latent_scene = np.concatenate(list(vae.encode(frame_gen_scene)))
     print("np.shape(latent_scene)", np.shape(latent_scene))
     if output_folder is not None:
-        visualize_video(vae, latent_scene, video_scene, input_path, output_folder)
+        basename = os.path.basename(input_path)
+        width = int(video_scene.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video_scene.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames_per_second = video_scene.get(cv2.CAP_PROP_FPS)
+        num_frames = int(video_scene.get(cv2.CAP_PROP_FRAME_COUNT))
+        print("basename", basename)
+        print("width", width)
+        print("height", height)
+        print("frames_per_second", frames_per_second)
+        print("num_frames", num_frames)
+
+        visualize_video(vae, latent_scene, basename, width, height, frames_per_second, output_folder)
 
     video_scene.release()
 
@@ -118,7 +118,18 @@ def get_latent_occlusion(basename, occlusion_input_folder, ori_width, ori_height
     latent_occlusion = np.concatenate(list(vae.encode(frame_gen_occlusion_filtered)))
     print("np.shape(latent_occlusion)", np.shape(latent_occlusion))
     if output_folder is not None:
-        visualize_video(vae, latent_occlusion, video_occlusion, video_path, output_folder)
+        basename = os.path.basename(video_path)
+        width = int(video_occlusion.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video_occlusion.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames_per_second = video_occlusion.get(cv2.CAP_PROP_FPS)
+        num_frames = int(video_occlusion.get(cv2.CAP_PROP_FRAME_COUNT))
+        print("basename", basename)
+        print("width", width)
+        print("height", height)
+        print("frames_per_second", frames_per_second)
+        print("num_frames", num_frames)
+
+        visualize_video(vae, latent_occlusion, basename, width, height, frames_per_second, output_folder)
     
     video_occlusion.release()
 
@@ -141,7 +152,18 @@ def get_latent_video(input_path, basename, resized_folder, ori_width, ori_height
     latent_video = np.concatenate(list(vae.encode(frame_gen_video_filtered)))
     print("np.shape(latent_video)", np.shape(latent_video))
     if output_folder is not None:
-        visualize_video(vae, latent_video, video_ori, input_path, output_folder)
+        basename = os.path.basename(video_path)
+        width = int(video_ori.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video_ori.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames_per_second = video_ori.get(cv2.CAP_PROP_FPS)
+        num_frames = int(video_ori.get(cv2.CAP_PROP_FRAME_COUNT))
+        print("basename", basename)
+        print("width", width)
+        print("height", height)
+        print("frames_per_second", frames_per_second)
+        print("num_frames", num_frames)
+
+        visualize_video(vae, latent_video, basename, width, height, frames_per_second, output_folder)
     
     video_ori.release()
 
