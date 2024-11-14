@@ -596,6 +596,28 @@ class InferencePipeline():
 
         return (avatar_image*masks).astype(np.uint8)
 
+    def infer_already_preprocessed(self, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref, frame_gen, width, height, output_video_path):
+        model, reference_control_writer, reference_control_reader = self.get_model()
+
+        joints2d = np.concatenate(list(self.apply_pose_guider(model, joints2d)))  # (f, c, h, w)
+        print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        output_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))  # (f, c, h, w)
+        del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
+        print("np.shape(output_frames)", np.shape(output_frames), type(output_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        output_frames = self.get_images_from_latents(output_frames)
+        print("np.shape(output_frames)", np.shape(output_frames), type(output_frames))
+        free_gpu_memory(self.accelerator)
+        get_gpu_memory_usage()
+
+        self.resize_back_frames_and_save(output_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
+        return output_video_path
+
     def __call__(self, input_video_path, input_avatar_image_path, input_motion_video_path, output_video_path):
         free_gpu_memory(self.accelerator)
 
@@ -716,26 +738,7 @@ class InferencePipeline():
         free_gpu_memory(self.accelerator)
         get_gpu_memory_usage()
 
-        model, reference_control_writer, reference_control_reader = self.get_model()
-
-        joints2d = np.concatenate(list(self.apply_pose_guider(model, joints2d)))  # (f, c, h, w)
-        print("np.shape(joints2d)", np.shape(joints2d), type(joints2d))
-        free_gpu_memory(self.accelerator)
-        get_gpu_memory_usage()
-
-        output_frames = np.concatenate(list(self.apply_diffusion(model, reference_control_writer, reference_control_reader, joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref)))  # (f, c, h, w)
-        del scene_frames, occlusion_frames, joints2d, clip_embeddings, apose_ref
-        print("np.shape(output_frames)", np.shape(output_frames), type(output_frames))
-        free_gpu_memory(self.accelerator)
-        get_gpu_memory_usage()
-
-        output_frames = self.get_images_from_latents(output_frames)
-        print("np.shape(output_frames)", np.shape(output_frames), type(output_frames))
-        free_gpu_memory(self.accelerator)
-        get_gpu_memory_usage()
-
         if output_video_path is None:
             output_video_path = input_video_path.replace(".mp4", "_output.mp4")
 
-        self.resize_back_frames_and_save(output_frames, frame_gen, width, height, self.input_net_fps, output_video_path)
-        return output_video_path
+        return self.infer_already_preprocessed(joints2d, clip_embeddings, scene_frames, occlusion_frames, apose_ref, frame_gen, width, height, output_video_path)
