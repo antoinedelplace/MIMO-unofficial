@@ -25,7 +25,7 @@ solver:
   adam_epsilon: 1.0e-8
 
 val:
-  validation_steps: 20 
+  validation_steps: 2000
 
 noise_scheduler_kwargs:
   num_train_timesteps: 1000

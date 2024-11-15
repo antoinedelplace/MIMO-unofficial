@@ -13,6 +13,8 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from safetensors.torch import load_file
+
 from omegaconf import OmegaConf
 import bitsandbytes as bnb
 import mlflow
@@ -321,7 +323,15 @@ class TrainingPipeline:
             
             path, global_step = get_last_checkpoint(resume_dir)
             
-            self.accelerator.load_state(os.path.join(resume_dir, path))
+            try:
+                self.accelerator.load_state(os.path.join(resume_dir, path))
+            except Exception as e:
+                self.accelerator.print(f"Only loading weights because unable to load the whole checkpoint: {e}")
+                unwrapped_model = self.accelerator.unwrap_model(self.model)
+                checkpoint_path = os.path.join(resume_dir, path, "model.safetensors")
+                checkpoint = load_file(checkpoint_path)
+                unwrapped_model.load_state_dict(checkpoint)
+
             self.accelerator.print(f"Resuming from checkpoint {path}")
 
             first_epoch = global_step // num_update_steps_per_epoch
