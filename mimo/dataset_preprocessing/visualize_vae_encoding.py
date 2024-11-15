@@ -46,4 +46,4 @@ if __name__ == "__main__":
     args = parse_args(main)
     main(**vars(args))
 
-# python mimo/dataset_preprocessing/vizualize_vae_encoding.py
+# python mimo/dataset_preprocessing/visualize_vae_encoding.py
