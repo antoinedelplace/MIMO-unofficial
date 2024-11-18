@@ -111,10 +111,14 @@ class TrainingPipeline:
 
         ## Freeze
         reference_unet = freeze_top_layer_reference_unet(reference_unet)
-        # reference_unet.requires_grad_(False)
-        # denoising_unet.requires_grad_(False)
-        # pose_guider.requires_grad_(False)
-        # denoising_unet = unfreeze_motion_module(denoising_unet)
+        if self.cfg.solver.freeze_referenceNet:
+            reference_unet.requires_grad_(False)
+        if self.cfg.solver.freeze_denoisingUnet:
+            denoising_unet.requires_grad_(False)
+        if self.cfg.solver.freeze_poseGuider:
+            pose_guider.requires_grad_(False)
+        if not self.cfg.solver.freeze_motionModule:
+            denoising_unet = unfreeze_motion_module(denoising_unet)
         
         reference_control_writer = ReferenceAttentionControl(
             reference_unet,
@@ -138,10 +142,10 @@ class TrainingPipeline:
                     "xformers is not available. Make sure it is installed correctly"
                 )
         
-        if self.cfg.solver.gradient_checkpointing:
+        if self.cfg.solver.gradient_checkpointing_referenceNet:
             reference_unet.enable_gradient_checkpointing()
-            # Gradient checkpointing triggers an error when reference_unet is not freezed (Trying to backward through the graph a second time)
-            # denoising_unet.enable_gradient_checkpointing()
+        if self.cfg.solver.gradient_checkpointing_denoisingUnet:
+            denoising_unet.enable_gradient_checkpointing()
         
         model = Net(
             reference_unet,
@@ -184,7 +188,7 @@ class TrainingPipeline:
             mixed_precision=self.cfg.solver.mixed_precision,
             log_with="mlflow",
             project_dir=ML_RUNS,
-            kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=True)],
+            kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=(not self.cfg.solver.freeze_referenceNet))],
         )
 
     def get_logger(self, accelerator):

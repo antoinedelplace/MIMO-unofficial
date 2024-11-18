@@ -1,23 +1,31 @@
 data:
   train_batch_size: 1
   window_stride: 4 
-  window_length: 8
+  window_length: 24
   num_workers: 16
 
 solver:
   gradient_accumulation_steps: 1
   mixed_precision: 'fp16'
   enable_xformers_memory_efficient_attention: True 
-  gradient_checkpointing: True 
-  max_train_steps: 200000
+  gradient_checkpointing_referenceNet: True 
+  gradient_checkpointing_denoisingUnet: True  # Triggers an error when reference_unet is not frozen (Trying to backward through the graph a second time)
+  max_train_steps: 400000
   max_grad_norm: 1.0
-  # lr
+
+  ## freeze
+  freeze_referenceNet: True
+  freeze_denoisingUnet: True
+  freeze_poseGuider: True
+  freeze_motionModule: False
+
+  ## lr
   learning_rate: 1e-5
   scale_lr: False 
   lr_warmup_steps: 1
   lr_scheduler: 'constant'
 
-  # optimizer
+  ## optimizer
   use_8bit_adam: True 
   adam_beta1: 0.9
   adam_beta2: 0.999
@@ -42,5 +50,5 @@ snr_gamma: 5.0
 enable_zero_snr: True 
 
 seed: 123456
-resume_from_checkpoint: 'train_outputs/test4'
-exp_name: 'test5'
+resume_from_checkpoint: 'train_outputs/test5'
+exp_name: 'test6'
