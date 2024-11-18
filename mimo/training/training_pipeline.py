@@ -238,7 +238,18 @@ class TrainingPipeline:
         trainable_params = list(filter(lambda p: p.requires_grad, model.parameters()))
         total_params = sum(p.numel() for p in trainable_params)
         self.logger.info(f"Total trainable parameters: {total_params}")
+
+        if self.cfg.add_noise_trainable_params:
+            self.add_noise_to_trainable_params(model)
+
         return trainable_params
+    
+    def add_noise_to_trainable_params(self, model, noise_std=0.1):
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    noise = torch.randn_like(param) * noise_std
+                    param.add_(noise)
 
     def get_optimizer(self, trainable_params, learning_rate):
         if self.cfg.solver.use_8bit_adam:
