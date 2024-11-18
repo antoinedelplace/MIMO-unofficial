@@ -46,8 +46,8 @@ from mimo.training.training_dataset import TrainingDataset, collate_fn
 from mimo.training.models import Net
 
 class TrainingPipeline:
-    def __init__(self):
-        self.cfg = OmegaConf.load("./mimo/configs/training/cfg.yaml")
+    def __init__(self, training_config):
+        self.cfg = OmegaConf.load(assert_file_exist(training_config))
         self.infer_cfg = OmegaConf.load("./mimo/configs/inference/inference.yaml")
 
         self.config_seed()
