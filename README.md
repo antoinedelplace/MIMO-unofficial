@@ -149,7 +149,8 @@ accelerate config
    - numa efficiency
    - fp16
 
-accelerate launch mimo/training/main.py -c 1540
+accelerate launch mimo/training/main.py -c 1540 -t ./mimo/configs/training/cfg_phase1.yaml
+accelerate launch mimo/training/main.py -c 1540 -t ./mimo/configs/training/cfg_phase2.yaml
 ```
 
 ## 🙏🏻 Acknowledgements
