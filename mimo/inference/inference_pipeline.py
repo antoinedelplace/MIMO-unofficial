@@ -584,7 +584,6 @@ class InferencePipeline():
 
         sam2_model = build_sam2(model_cfg, checkpoint)
         predictor = SAM2ImagePredictor(sam2_model)
-        predictor.eval()
 
         predictor = self.accelerator.prepare(predictor)
 
