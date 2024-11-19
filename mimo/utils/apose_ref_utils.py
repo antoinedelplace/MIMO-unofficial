@@ -151,6 +151,7 @@ class ReposerBatchPredictor():
         pose_guider.load_state_dict(
             torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
+        pose_guider.eval()
         
         reference_unet = UNet2DConditionModel.from_pretrained(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
@@ -160,6 +161,7 @@ class ReposerBatchPredictor():
         reference_unet.load_state_dict(
             torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
+        reference_unet.eval()
 
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
@@ -170,9 +172,13 @@ class ReposerBatchPredictor():
             torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "denoising_unet.pth"), map_location="cpu", weights_only=True),
             strict=False,
         )
+        denoising_unet.eval()
 
         sched_kwargs = OmegaConf.to_container(infer_config.noise_scheduler_kwargs)
         scheduler = DDIMScheduler(**sched_kwargs)
+
+        vae.vae.eval()
+        clip.image_enc.eval()
 
         self.pipe = Pose2VideoPipeline(
             vae=vae.vae,

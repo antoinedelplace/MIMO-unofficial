@@ -150,6 +150,7 @@ class InferencePipeline():
         reference_unet.load_state_dict(
             torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "reference_unet.pth"), map_location="cpu", weights_only=True),
         )
+        reference_unet.eval()
         
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             os.path.join(BASE_MODEL_FOLDER, "unet"),
@@ -169,11 +170,13 @@ class InferencePipeline():
             padding=(1, 1)
         )
         denoising_unet.conv_in.weight = torch.nn.Parameter(torch.cat([original_weights] * 3, dim=1))
+        denoising_unet.eval()
 
         pose_guider = PoseGuider(conditioning_embedding_channels=320)
         pose_guider.load_state_dict(
             torch.load(assert_file_exist(ANIMATE_ANYONE_FOLDER, "pose_guider.pth"), map_location="cpu", weights_only=True),
         )
+        pose_guider.eval()
         
         reference_control_writer = ReferenceAttentionControl(
             reference_unet,
@@ -213,7 +216,8 @@ class InferencePipeline():
             assert_file_exist(checkpoint_path)
             checkpoint = load_file(checkpoint_path)
             model.load_state_dict(checkpoint)
-        
+        model.eval()
+
         return model, reference_control_writer, reference_control_reader
 
     def get_noise_scheduler(self):
@@ -238,43 +242,50 @@ class InferencePipeline():
                                              self.input_net_size, 
                                              **DEPTH_ANYTHING_MODEL_CONFIGS[self.depth_anything_encoder])
         depth_anything.load_state_dict(torch.load(assert_file_exist(CHECKPOINTS_FOLDER, f'depth_anything_v2_{self.depth_anything_encoder}.pth'), map_location='cpu', weights_only=True))
+        depth_anything.eval()
 
         depth_anything = self.accelerator.prepare(depth_anything)
 
-        return get_depth(resized_frames, depth_anything)
+        with torch.no_grad():
+            return get_depth(resized_frames, depth_anything)
 
     def get_detectron2_output(self, resized_frames):
         cfg = get_cfg_settings()
         predictor = DetectronBatchPredictor(cfg, self.batch_size_detectron2, self.num_workers)
+        predictor.model.eval()
 
         predictor.model = self.accelerator.prepare(predictor.model)
-
-        return post_processing_detectron2(list(predictor(resized_frames)))
+        
+        with torch.no_grad():
+            return post_processing_detectron2(list(predictor(resized_frames)))
     
     def get_layers_sam2(self, input_video_path, resized_frames, detectron2_output, depth_frames):
         checkpoint = assert_file_exist(CHECKPOINTS_FOLDER, "sam2.1_hiera_large.pt")
         model_cfg = os.path.join(SAM2_REPO, "configs/sam2.1/sam2.1_hiera_l.yaml")
         predictor = build_sam2_video_predictor(model_cfg, checkpoint)
+        predictor.eval()
 
         predictor = self.accelerator.prepare(predictor)
 
-        (
-            min_frame_idx, 
-            max_frame_idx, 
-            instance_sam_output, 
-            foreground_mask
-        ) = get_instance_sam_output(input_video_path, detectron2_output, depth_frames, predictor, self.score_threshold_detectron2)
+        with torch.no_grad():
+            (
+                min_frame_idx, 
+                max_frame_idx, 
+                instance_sam_output, 
+                foreground_mask
+            ) = get_instance_sam_output(input_video_path, detectron2_output, depth_frames, predictor, self.score_threshold_detectron2)
 
-        return process_layers(resized_frames, 
-                                instance_sam_output, 
-                                foreground_mask, 
-                                min_frame_idx, 
-                                max_frame_idx)
+            return process_layers(resized_frames, 
+                                    instance_sam_output, 
+                                    foreground_mask, 
+                                    min_frame_idx, 
+                                    max_frame_idx)
     
     def inpaint_scene_layer(self, scene_frames):
         predictor = ProPainterBatchPredictor(self.batch_size_propainter, self.num_workers)
 
-        return inpaint_frames(scene_frames, predictor)
+        with torch.no_grad():
+            return inpaint_frames(scene_frames, predictor)
 
     def get_apose_ref(self, resized_frames):
         download_image_encoder()
@@ -290,10 +301,11 @@ class InferencePipeline():
 
         reposer.pipe, dw_pose_detector = self.accelerator.prepare(reposer.pipe, dw_pose_detector)
 
-        assert_file_exist(self.a_pose_raw_path)
-        a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path, dw_pose_detector)
+        with torch.no_grad():
+            assert_file_exist(self.a_pose_raw_path)
+            a_pose_kps, ref_points_2d = get_kps_image(self.a_pose_raw_path, dw_pose_detector)
 
-        return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d, dw_pose_detector)
+            return get_apose_ref_img(resized_frames, reposer, a_pose_kps, ref_points_2d, dw_pose_detector)
 
     def upscale_apose(self, a_pose_ref):
         prompt = "Someone in A pose"
@@ -305,57 +317,66 @@ class InferencePipeline():
 
         upscaler.pipeline = self.accelerator.prepare(upscaler.pipeline)
 
-        return upscaler(a_pose_ref, prompt)
+        with torch.no_grad():
+            return upscaler(a_pose_ref, prompt)
 
     def clip_apose(self, apose_ref):
         download_image_encoder()
 
         clip = CLIPBatchPredictor(self.batch_size_clip, self.num_workers)
+        clip.image_enc.eval()
 
         clip.image_enc = self.accelerator.prepare(clip.image_enc)
 
-        return list(clip([apose_ref]))[0]
+        with torch.no_grad():
+            return list(clip([apose_ref]))[0]
     
     def vae_encoding(self, scene_frames, occlusion_frames, apose_ref, ori_width, ori_height):
         download_vae()
 
         vae = VaeBatchPredictor(self.batch_size_vae, self.num_workers)
+        vae.vae.eval()
 
         vae.vae = self.accelerator.prepare(vae.vae)
 
-        scene_frames = np.concatenate(list(vae.encode(scene_frames)))
-        occlusion_frames_filtered = remove_mirror_occlusion_for_vertical_videos(occlusion_frames, ori_width, ori_height, self.input_net_size)
-        occlusion_frames = np.concatenate(list(vae.encode(occlusion_frames_filtered)))
-        apose_ref = np.concatenate(list(vae.encode([apose_ref])))
+        with torch.no_grad():
+            scene_frames = np.concatenate(list(vae.encode(scene_frames)))
+            occlusion_frames_filtered = remove_mirror_occlusion_for_vertical_videos(occlusion_frames, ori_width, ori_height, self.input_net_size)
+            occlusion_frames = np.concatenate(list(vae.encode(occlusion_frames_filtered)))
+            apose_ref = np.concatenate(list(vae.encode([apose_ref])))
 
-        return scene_frames, occlusion_frames, apose_ref
+            return scene_frames, occlusion_frames, apose_ref
 
     def get_joints2d(self, input_video_path):
         phalp_tracker = HMR2_4dhuman(get_cfg())
+        phalp_tracker.HMAR.eval()
 
         phalp_tracker.HMAR = self.accelerator.prepare(phalp_tracker.HMAR)
 
-        data_4DH = get_data_from_4DH(input_video_path, phalp_tracker)
+        with torch.no_grad():
+            data_4DH = get_data_from_4DH(input_video_path, phalp_tracker)
 
-        return data_4DH["data_joints_2d"]
+            return data_4DH["data_joints_2d"]
 
     def get_rasterized_joints_2d(self, data_joints_2d):
         rasterizer = RasterizerBatchPredictor(self.batch_size_rasterizer, self.num_workers, self.input_net_size, self.input_net_size)
 
-        return np.concatenate(list(rasterizer(data_joints_2d)))
+        with torch.no_grad():
+            return np.concatenate(list(rasterizer(data_joints_2d)))
 
     def apply_reference_image(self, model, reference_control_reader, reference_control_writer, latent_apose, encoder_hidden_states):
-        t = torch.zeros((1), dtype=latent_apose.dtype, device=latent_apose.device)
+        with torch.no_grad():
+            t = torch.zeros((1), dtype=latent_apose.dtype, device=latent_apose.device)
 
-        model.reference_unet(
-            latent_apose.repeat(
-                (2 if self.do_classifier_free_guidance else 1), 1, 1, 1
-            ),  # (2b, c, h, w) or (b, c, h, w)
-            t,
-            encoder_hidden_states=encoder_hidden_states,
-            return_dict=False,
-        )
-        reference_control_reader.update(reference_control_writer)
+            model.reference_unet(
+                latent_apose.repeat(
+                    (2 if self.do_classifier_free_guidance else 1), 1, 1, 1
+                ),  # (2b, c, h, w) or (b, c, h, w)
+                t,
+                encoder_hidden_states=encoder_hidden_states,
+                return_dict=False,
+            )
+            reference_control_reader.update(reference_control_writer)
 
     def get_init_latent(self, latents_scene, noise_scheduler):
         latents = randn_tensor(latents_scene.shape, generator=torch.Generator(device=latents_scene.device), device=latents_scene.device, dtype=latents_scene.dtype)
@@ -373,23 +394,24 @@ class InferencePipeline():
         return noise_pred
 
     def get_noise_pred(self, timestep, model, noise_scheduler, latent_pose, latents, latents_scene, latents_occlusion, encoder_hidden_states):
-        latents = torch.cat((latents, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
-        latents = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
-        latents = noise_scheduler.scale_model_input(latents, timestep)
-        
-        latent_pose = latent_pose.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
+        with torch.no_grad():
+            latents = torch.cat((latents, latents_scene, latents_occlusion), dim=1)  # (b, c+c+c, f, h, w)
+            latents = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
+            latents = noise_scheduler.scale_model_input(latents, timestep)
+            
+            latent_pose = latent_pose.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)  # (2b, c, f, h, w) or (b, c, f, h, w)
 
-        noise_pred = model.denoising_unet(
-            latents,
-            timestep,
-            encoder_hidden_states=encoder_hidden_states,
-            pose_cond_fea=latent_pose,
-            return_dict=False,
-        )[0]
-        
-        noise_pred = self.apply_guidance(noise_pred)
-        
-        return noise_pred
+            noise_pred = model.denoising_unet(
+                latents,
+                timestep,
+                encoder_hidden_states=encoder_hidden_states,
+                pose_cond_fea=latent_pose,
+                return_dict=False,
+            )[0]
+            
+            noise_pred = self.apply_guidance(noise_pred)
+            
+            return noise_pred
     
     def update_progress_bar(self, progress_bar, i_step, noise_scheduler, num_warmup_steps):
         if i_step == len(noise_scheduler.timesteps) - 1 or (
@@ -417,15 +439,16 @@ class InferencePipeline():
         return dataloader
     
     def get_encoder_hidden_states(self, a_pose_clip):
-        encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
-        if self.do_classifier_free_guidance:
-            uncond_encoder_hidden_states = torch.zeros_like(encoder_hidden_states)
+        with torch.no_grad():
+            encoder_hidden_states = a_pose_clip.unsqueeze(1) # (b, 1, d)
+            if self.do_classifier_free_guidance:
+                uncond_encoder_hidden_states = torch.zeros_like(encoder_hidden_states)
 
-            encoder_hidden_states = torch.cat(
-                [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
-            ) # (2b, 1, d)
-        
-        return encoder_hidden_states
+                encoder_hidden_states = torch.cat(
+                    [uncond_encoder_hidden_states, encoder_hidden_states], dim=0
+                ) # (2b, 1, d)
+            
+            return encoder_hidden_states
     
     def apply_pose_guider(self, model, rast_2d_joints):
         dataset = NpzDataset(rast_2d_joints)
@@ -507,12 +530,14 @@ class InferencePipeline():
         download_vae()
 
         vae = VaeBatchPredictor(self.batch_size_vae, self.num_workers)
+        vae.vae.eval()
 
         vae.vae = self.accelerator.prepare(vae.vae)
 
-        output_images = np.concatenate(list(vae.decode(latents)))
+        with torch.no_grad():
+            output_images = np.concatenate(list(vae.decode(latents)))
 
-        return output_images
+            return output_images
     
     def resize_back_frames_and_save(self, frames, ori_frames, width, height, fps, output_video_path):
         output_file = cv2.VideoWriter(
@@ -559,19 +584,21 @@ class InferencePipeline():
 
         sam2_model = build_sam2(model_cfg, checkpoint)
         predictor = SAM2ImagePredictor(sam2_model)
+        predictor.eval()
 
         predictor = self.accelerator.prepare(predictor)
 
-        predictor.set_image(cv2.cvtColor(avatar_image, cv2.COLOR_BGR2RGB))
+        with torch.no_grad():
+            predictor.set_image(cv2.cvtColor(avatar_image, cv2.COLOR_BGR2RGB))
 
-        masks, scores, _ = predictor.predict(
-            point_coords=None,
-            point_labels=None,
-            box=data_pred_boxes,
-            multimask_output=False,
-        )
+            masks, scores, _ = predictor.predict(
+                point_coords=None,
+                point_labels=None,
+                box=data_pred_boxes,
+                multimask_output=False,
+            )
 
-        return masks.transpose(1, 2, 0)
+            return masks.transpose(1, 2, 0)
 
     def get_avatar_image(self, input_avatar_image_path):
         avatar_image = resize_frame(cv2.imread(input_avatar_image_path), self.input_net_size)
