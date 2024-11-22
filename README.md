@@ -7,7 +7,7 @@ Original paper: [![arXiv](https://img.shields.io/badge/arXiv-2409.16160-00ff00.s
 ## 🎯 Overview
 This repository offers a comprehensive pipeline for training and inference to transform character appearances and motions in videos. As part of the video-to-video generation category, this framework enables dynamic character modification with optional inputs, including an avatar photo and/or 3D animations.
 
-<video controls autoplay loop src="https://github.com/antoinedelplace/MIMO-unofficial/assets/demo.webm">Demo</video>
+<video controls autoplay loop src="https://github.com/antoinedelplace/MIMO-unofficial/assets/demo.mov">Demo</video>
 
 
 ## ⚒️ Installation and Setup
